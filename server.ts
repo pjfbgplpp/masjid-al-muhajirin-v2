@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express from 'express';
 import path from 'path';
 import fs from 'fs';
@@ -145,7 +146,12 @@ async function syncFromSupabaseOnStartup(): Promise<void> {
     console.warn('[Server Startup] Supabase sync notice:', err);
   }
 }
-syncFromSupabaseOnStartup().catch(() => {});
+// Skipped on Vercel: module scope re-runs on every cold start, so this would pull the
+// full payload each time — and neither the in-memory cache nor saveDataFile() survives
+// the invocation there, making the download pure egress for nothing.
+if (!process.env.VERCEL) {
+  syncFromSupabaseOnStartup().catch(() => {});
+}
 
 // API Routes
 app.get('/api/health', (req, res) => {
@@ -531,4 +537,12 @@ async function startServer() {
   });
 }
 
-startServer();
+// On Vercel this module is imported by api/[...path].ts as a serverless function,
+// not run as a long-lived process — the runtime invokes the exported Express app
+// per-request, so listening on a port here would be meaningless (and static files
+// are already served by Vercel's own build output, not by Express).
+if (!process.env.VERCEL) {
+  startServer();
+}
+
+export default app;
