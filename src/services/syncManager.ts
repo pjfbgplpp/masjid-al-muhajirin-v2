@@ -145,6 +145,18 @@ export async function initSyncManager(): Promise<void> {
 
 // Background sync lock
 let isSyncInProgress = false;
+
+// Signature of the rows from the last successful full download. The UI may refuse to
+// apply fresh data (admin has unsaved edits), leaving the caller's copy on an older
+// updatedAt — without this guard the same payload is re-downloaded on every poll.
+let lastDownloadedRemoteSignature: string | null = null;
+
+function buildRemoteSignature(rows: { code: unknown; updated_at: unknown }[]): string {
+  return rows
+    .map((r) => `${String(r.code).toUpperCase()}@${String(r.updated_at)}`)
+    .sort()
+    .join('|');
+}
 let globalDisplaysProvider: (() => DisplayConfig[]) | null = null;
 let globalDisplaysConsumer: ((displays: DisplayConfig[]) => void) | null = null;
 
@@ -242,8 +254,11 @@ export async function performSmartSync(
     }
 
     // 2. Compare timestamps with local displays
+    const remoteSignature = buildRemoteSignature(metaRows);
     let hasRemoteChanges = false;
-    if (metaRows.length !== localDisplays.length) {
+    if (remoteSignature === lastDownloadedRemoteSignature) {
+      hasRemoteChanges = false;
+    } else if (metaRows.length !== localDisplays.length) {
       hasRemoteChanges = true;
     } else {
       for (const remote of metaRows) {
@@ -283,6 +298,7 @@ export async function performSmartSync(
 
     const fullRemote = await fetchDisplaysFromSupabase();
     if (fullRemote && fullRemote.length > 0) {
+      lastDownloadedRemoteSignature = remoteSignature;
       await handleSuccessfulSync(fullRemote, onUpdateDisplays);
       return fullRemote;
     }
