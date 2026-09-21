@@ -24,6 +24,7 @@ import { MosqueLogoConfigCard } from '../MosqueLogoConfigCard';
 
 interface LayoutTabProps {
   layout: LayoutConfig;
+  displayCode: string;
   onChange: (updated: LayoutConfig) => void;
   onSave: () => void;
 }
@@ -37,7 +38,7 @@ interface LayoutOption {
   diagram: React.ReactNode;
 }
 
-export const LayoutTab: React.FC<LayoutTabProps> = ({ layout, onChange, onSave }) => {
+export const LayoutTab: React.FC<LayoutTabProps> = ({ layout, displayCode, onChange, onSave }) => {
   const currentTemplate = layout.templateId || 'classic';
 
   const layoutOptions: LayoutOption[] = [
@@ -418,6 +419,7 @@ export const LayoutTab: React.FC<LayoutTabProps> = ({ layout, onChange, onSave }
       {/* 2.5 PENGATURAN LOGO & LAMBANG MASJID */}
       <MosqueLogoConfigCard
         layout={layout}
+        displayCode={displayCode}
         onChange={onChange}
         onSave={onSave}
       />

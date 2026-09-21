@@ -29,6 +29,7 @@ interface SlideshowTabProps {
   slides: SlideItem[];
   announcements?: AnnouncementItem[];
   layout?: LayoutConfig;
+  displayCode: string;
   onChange: (updated: SlideItem[]) => void;
   onAnnouncementsChange?: (updated: AnnouncementItem[]) => void;
   onLayoutChange?: (updated: LayoutConfig) => void;
@@ -66,6 +67,7 @@ export const SlideshowTab: React.FC<SlideshowTabProps> = ({
   slides,
   announcements = [],
   layout,
+  displayCode,
   onChange,
   onAnnouncementsChange,
   onLayoutChange,
@@ -480,6 +482,7 @@ export const SlideshowTab: React.FC<SlideshowTabProps> = ({
       {layout && onLayoutChange && (
         <MosqueLogoConfigCard
           layout={layout}
+          displayCode={displayCode}
           onChange={onLayoutChange}
           onSave={onSave}
         />
@@ -1116,6 +1119,7 @@ export const SlideshowTab: React.FC<SlideshowTabProps> = ({
                   onImageSelected={(url) =>
                     setEditingSlide({ ...editingSlide, imageUrl: url })
                   }
+                  uploadPathPrefix={`${displayCode}/slides/${editingSlide.id}`}
                   label="Upload Pamflet / Flyer Poster (Opsional)"
                   recommendedSize="Rasio 16:9 Landscape atau Banner (Bisa dikosongkan jika hanya teks)"
                 />

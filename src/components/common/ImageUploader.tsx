@@ -1,13 +1,17 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Upload, X, RotateCw, Image as ImageIcon, Check, Trash2, RefreshCw, Link as LinkIcon, HardDrive } from 'lucide-react';
+import { Upload, X, RotateCw, Image as ImageIcon, Check, Trash2, RefreshCw, Link as LinkIcon, HardDrive, Loader2, AlertCircle } from 'lucide-react';
+import { uploadImageToStorage, deleteImageFromStorage } from '../../services/supabase';
 
 interface ImageUploaderProps {
   currentImageUrl?: string;
-  onImageSelected: (base64OrUrl: string) => void;
+  onImageSelected: (url: string) => void;
   label?: string;
   recommendedSize?: string;
   className?: string;
   clearButtonLabel?: string;
+  /** Identifies where this image is stored, e.g. "MASJID-1/logo" or "MASJID-1/slides/abc123".
+   *  Required for the "Upload File" tab — without it only the URL-paste tab works. */
+  uploadPathPrefix?: string;
 }
 
 export function parseAndFormatImageUrl(rawUrl: string): string {
@@ -34,6 +38,7 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
   recommendedSize = 'Rasio 16:9 (1920x1080)',
   className = '',
   clearButtonLabel = 'Hapus Gambar (Jadikan Polos)',
+  uploadPathPrefix,
 }) => {
   const [activeMode, setActiveMode] = useState<'upload' | 'url'>('upload');
   const [dragActive, setDragActive] = useState(false);
@@ -41,7 +46,34 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
   const [urlInput, setUrlInput] = useState('');
   const [rotation, setRotation] = useState(0);
   const [isDriveDetected, setIsDriveDetected] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const uploadBlob = async (blob: Blob, mime: string) => {
+    if (!uploadPathPrefix) {
+      setUploadError('Konteks penyimpanan tidak tersedia.');
+      return;
+    }
+    const localPreview = URL.createObjectURL(blob);
+    setPreview(localPreview);
+    setIsUploading(true);
+    setUploadError('');
+
+    const previousUrl = currentImageUrl;
+    const uploadedUrl = await uploadImageToStorage(blob, uploadPathPrefix, mime);
+
+    setIsUploading(false);
+    if (uploadedUrl) {
+      onImageSelected(uploadedUrl);
+      if (previousUrl) {
+        deleteImageFromStorage(previousUrl).catch(() => {});
+      }
+    } else {
+      setUploadError('Gagal mengunggah gambar. Periksa koneksi internet Anda dan coba lagi.');
+      setPreview(currentImageUrl || '');
+    }
+  };
 
   useEffect(() => {
     setPreview(currentImageUrl || '');
@@ -58,6 +90,11 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
 
     if (file.size > 20 * 1024 * 1024) {
       alert('Ukuran gambar terlalu besar. Maksimal 20MB.');
+      return;
+    }
+
+    if (!uploadPathPrefix) {
+      setUploadError('Konteks penyimpanan tidak tersedia untuk mengunggah file.');
       return;
     }
 
@@ -87,22 +124,28 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
         canvas.width = width;
         canvas.height = height;
         const ctx = canvas.getContext('2d');
-        if (ctx) {
-          ctx.drawImage(img, 0, 0, width, height);
-          const isSmallPng = file.type === 'image/png' && file.size < 300 * 1024;
-          const mime = isSmallPng ? 'image/png' : 'image/jpeg';
-          const quality = isSmallPng ? undefined : 0.72;
-          const compressed = canvas.toDataURL(mime, quality);
-          setPreview(compressed);
-          onImageSelected(compressed);
-        } else {
-          setPreview(rawDataUrl);
-          onImageSelected(rawDataUrl);
+        if (!ctx) {
+          setUploadError('Gagal memproses gambar.');
+          return;
         }
+        ctx.drawImage(img, 0, 0, width, height);
+        const isSmallPng = file.type === 'image/png' && file.size < 300 * 1024;
+        const mime = isSmallPng ? 'image/png' : 'image/jpeg';
+        const quality = isSmallPng ? undefined : 0.72;
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) {
+              setUploadError('Gagal memproses gambar.');
+              return;
+            }
+            uploadBlob(blob, mime);
+          },
+          mime,
+          quality
+        );
       };
       img.onerror = () => {
-        setPreview(rawDataUrl);
-        onImageSelected(rawDataUrl);
+        setUploadError('Gagal membaca file gambar.');
       };
       img.src = rawDataUrl;
     };
@@ -138,46 +181,59 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
   };
 
   const handleRotate = () => {
+    if (!preview || !uploadPathPrefix) return;
     const nextRot = (rotation + 90) % 360;
     setRotation(nextRot);
 
-    // Apply rotation on canvas
-    if (preview) {
-      const img = new Image();
-      img.crossOrigin = 'anonymous';
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return;
+    // Apply rotation on canvas, then re-upload the rotated version
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
 
-        if (nextRot === 90 || nextRot === 270) {
-          canvas.width = img.height;
-          canvas.height = img.width;
-        } else {
-          canvas.width = img.width;
-          canvas.height = img.height;
-        }
+      if (nextRot === 90 || nextRot === 270) {
+        canvas.width = img.height;
+        canvas.height = img.width;
+      } else {
+        canvas.width = img.width;
+        canvas.height = img.height;
+      }
 
-        ctx.translate(canvas.width / 2, canvas.height / 2);
-        ctx.rotate((nextRot * Math.PI) / 180);
-        ctx.drawImage(img, -img.width / 2, -img.height / 2);
+      ctx.translate(canvas.width / 2, canvas.height / 2);
+      ctx.rotate((nextRot * Math.PI) / 180);
+      ctx.drawImage(img, -img.width / 2, -img.height / 2);
 
-        const rotatedUrl = canvas.toDataURL('image/jpeg', 0.88);
-        setPreview(rotatedUrl);
-        onImageSelected(rotatedUrl);
-      };
-      img.src = preview;
-    }
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) {
+            setUploadError('Gagal memutar gambar.');
+            return;
+          }
+          uploadBlob(blob, 'image/jpeg');
+        },
+        'image/jpeg',
+        0.88
+      );
+    };
+    img.onerror = () => setUploadError('Gagal memutar gambar (mungkin terkendala CORS).');
+    img.src = preview;
   };
 
   const handleClear = () => {
+    const previousUrl = currentImageUrl;
     setPreview('');
     setUrlInput('');
     setIsDriveDetected(false);
     setRotation(0);
+    setUploadError('');
     onImageSelected('');
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
+    }
+    if (previousUrl) {
+      deleteImageFromStorage(previousUrl).catch(() => {});
     }
   };
 
@@ -214,6 +270,13 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
         </button>
       </div>
 
+      {uploadError && (
+        <div className="flex items-center gap-1.5 text-[11px] text-red-400 bg-red-950/40 border border-red-500/30 rounded-lg px-2.5 py-1.5">
+          <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+          <span>{uploadError}</span>
+        </div>
+      )}
+
       {preview ? (
         <div className="relative group rounded-xl overflow-hidden border border-emerald-500/30 bg-slate-900/60 shadow-lg">
           <div className="aspect-video w-full flex items-center justify-center bg-black/50 overflow-hidden relative">
@@ -223,22 +286,29 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
               className="max-h-full max-w-full object-contain transition-transform"
               referrerPolicy="no-referrer"
             />
+            {isUploading && (
+              <div className="absolute inset-0 bg-slate-950/70 flex items-center justify-center gap-2 text-xs text-white font-medium">
+                <Loader2 className="w-4 h-4 animate-spin" /> Mengunggah...
+              </div>
+            )}
           </div>
 
           <div className="absolute top-2 right-2 flex items-center gap-1.5 opacity-90 group-hover:opacity-100 transition-opacity">
             <button
               type="button"
               onClick={handleRotate}
+              disabled={isUploading}
               title="Putar 90 Derajat"
-              className="p-1.5 bg-slate-900/90 text-white hover:text-emerald-400 rounded-lg border border-white/10 shadow-lg text-xs flex items-center gap-1 backdrop-blur-sm transition-colors"
+              className="p-1.5 bg-slate-900/90 text-white hover:text-emerald-400 rounded-lg border border-white/10 shadow-lg text-xs flex items-center gap-1 backdrop-blur-sm transition-colors disabled:opacity-40 disabled:pointer-events-none"
             >
               <RotateCw className="w-3.5 h-3.5" />
             </button>
             <button
               type="button"
               onClick={handleClear}
+              disabled={isUploading}
               title="Hapus Gambar"
-              className="p-1.5 bg-red-600 hover:bg-red-500 text-white rounded-lg border border-red-400/40 shadow-lg text-xs flex items-center gap-1 backdrop-blur-sm transition-colors"
+              className="p-1.5 bg-red-600 hover:bg-red-500 text-white rounded-lg border border-red-400/40 shadow-lg text-xs flex items-center gap-1 backdrop-blur-sm transition-colors disabled:opacity-40 disabled:pointer-events-none"
             >
               <Trash2 className="w-3.5 h-3.5" />
             </button>
@@ -257,6 +327,7 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
             <div className="flex items-center gap-2">
               <button
                 type="button"
+                disabled={isUploading}
                 onClick={() => {
                   if (activeMode === 'upload') {
                     fileInputRef.current?.click();
@@ -265,14 +336,15 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
                     handleClear();
                   }
                 }}
-                className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white rounded-md text-[11px] font-medium flex items-center gap-1 transition-colors border border-white/5"
+                className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white rounded-md text-[11px] font-medium flex items-center gap-1 transition-colors border border-white/5 disabled:opacity-40 disabled:pointer-events-none"
               >
                 <RefreshCw className="w-3 h-3" /> Ganti Gambar
               </button>
               <button
                 type="button"
+                disabled={isUploading}
                 onClick={handleClear}
-                className="px-2.5 py-1 bg-red-950/80 hover:bg-red-900 text-red-300 hover:text-red-100 rounded-md text-[11px] font-medium flex items-center gap-1 transition-colors border border-red-500/30"
+                className="px-2.5 py-1 bg-red-950/80 hover:bg-red-900 text-red-300 hover:text-red-100 rounded-md text-[11px] font-medium flex items-center gap-1 transition-colors border border-red-500/30 disabled:opacity-40 disabled:pointer-events-none"
               >
                 <Trash2 className="w-3 h-3" /> {clearButtonLabel}
               </button>
@@ -326,7 +398,7 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
           <p className="text-sm font-medium text-slate-200">
             Tarik & Lepas gambar di sini, atau <span className="text-emerald-400 underline">pilih file</span>
           </p>
-          <p className="text-xs text-slate-500 mt-1">Mendukung format JPG, PNG, WEBP (Tersimpan otomatis ke database)</p>
+          <p className="text-xs text-slate-500 mt-1">Mendukung format JPG, PNG, WEBP (Diunggah otomatis ke cloud storage)</p>
         </div>
       )}
 

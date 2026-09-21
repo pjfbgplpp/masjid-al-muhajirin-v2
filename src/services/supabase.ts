@@ -480,3 +480,61 @@ export function subscribeToSupabaseDisplays(
     }
   };
 }
+
+const MEDIA_BUCKET = 'display-media';
+
+/**
+ * Upload an image blob to the display-media bucket and return its public URL.
+ * `pathPrefix` should identify the image slot (e.g. "MASJID-1/logo" or
+ * "MASJID-1/slides/abc123"); a timestamp suffix is appended so replacing an
+ * image always yields a fresh URL instead of hitting a stale cached one.
+ */
+export async function uploadImageToStorage(
+  blob: Blob,
+  pathPrefix: string,
+  contentType: string
+): Promise<string | null> {
+  const supabase = await ensureSupabaseClient();
+  if (!supabase) return null;
+
+  const ext = contentType === 'image/png' ? 'png' : 'jpg';
+  const path = `${pathPrefix}-${Date.now()}.${ext}`;
+
+  try {
+    const { error } = await supabase.storage
+      .from(MEDIA_BUCKET)
+      .upload(path, blob, { contentType, upsert: true });
+
+    if (error) {
+      console.error('❌ [Supabase Storage] Upload error:', error.message);
+      return null;
+    }
+
+    const { data } = supabase.storage.from(MEDIA_BUCKET).getPublicUrl(path);
+    return data.publicUrl;
+  } catch (err) {
+    console.error('❌ [Supabase Storage] Upload exception:', err);
+    return null;
+  }
+}
+
+/**
+ * Best-effort delete of a previously uploaded image so replacing/removing a
+ * picture doesn't leave orphaned files in the bucket. Safe no-op for URLs
+ * that aren't from this bucket (external links, data: URIs, etc.)
+ */
+export async function deleteImageFromStorage(publicUrl: string): Promise<void> {
+  const marker = `/storage/v1/object/public/${MEDIA_BUCKET}/`;
+  const idx = publicUrl.indexOf(marker);
+  if (idx === -1) return;
+  const path = publicUrl.slice(idx + marker.length);
+
+  const supabase = await ensureSupabaseClient();
+  if (!supabase) return;
+
+  try {
+    await supabase.storage.from(MEDIA_BUCKET).remove([path]);
+  } catch (err) {
+    console.warn('⚠️ [Supabase Storage] Delete notice:', err);
+  }
+}

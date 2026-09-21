@@ -628,6 +628,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
             {activeTab === 'layout' && (
               <LayoutTab
                 layout={currentConfig.layout}
+                displayCode={currentConfig.code}
                 onChange={(ly) => onConfigChange({ ...currentConfig, layout: ly })}
                 onSave={onSaveConfig}
               />
@@ -638,6 +639,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
                 slides={currentConfig.slides}
                 announcements={currentConfig.announcements}
                 layout={currentConfig.layout}
+                displayCode={currentConfig.code}
                 onChange={(sl) => onConfigChange({ ...currentConfig, slides: sl })}
                 onAnnouncementsChange={(ann) =>
                   onConfigChange({ ...currentConfig, announcements: ann })

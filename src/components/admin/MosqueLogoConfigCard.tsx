@@ -16,6 +16,7 @@ import { ImageUploader } from '../common/ImageUploader';
 
 interface MosqueLogoConfigCardProps {
   layout: LayoutConfig;
+  displayCode: string;
   onChange: (updated: LayoutConfig) => void;
   onSave?: () => void;
   compact?: boolean;
@@ -114,6 +115,7 @@ const PRESET_EMBLEMS = [
 
 export const MosqueLogoConfigCard: React.FC<MosqueLogoConfigCardProps> = ({
   layout,
+  displayCode,
   onChange,
   onSave,
 }) => {
@@ -339,6 +341,7 @@ export const MosqueLogoConfigCard: React.FC<MosqueLogoConfigCardProps> = ({
                   showLogo: true,
                 })
               }
+              uploadPathPrefix={`${displayCode}/logo`}
               label="Pilih File Lambang / Logo Masjid"
               recommendedSize="Format Bebas (Lingkaran, Perisai, atau Persegi). Otomatis pas tanpa terpotong."
               clearButtonLabel="Kembalikan ke Ikon Default"
