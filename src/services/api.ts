@@ -7,7 +7,7 @@ import {
 } from './storageDb';
 import { generateAndCache12MonthSchedule } from './prayerScheduleCache';
 import { cacheDisplayAssets } from './assetCache';
-import { performSmartSync } from './syncManager';
+import { performSmartSync, recordSyncCheckResult } from './syncManager';
 import {
   getSupabase,
   isSupabaseConfigured,
@@ -122,6 +122,7 @@ export function subscribeToConfigUpdates(callback: (displays: DisplayConfig[]) =
           safeSetLocalStorage(STORAGE_KEY, fresh);
           safeSetLocalStorage(BACKUP_KEY, fresh);
           callback(fresh);
+          recordSyncCheckResult(fresh.length).catch(() => {});
         }
       },
       (status) => {
@@ -155,6 +156,7 @@ export function subscribeToConfigUpdates(callback: (displays: DisplayConfig[]) =
             const currentMetaStr = JSON.stringify(metaRows);
             if (currentMetaStr === lastKnownMetaString) {
               // Exact match: 0 bytes downloaded!
+              recordSyncCheckResult(metaRows.length).catch(() => {});
               return;
             }
 
@@ -188,6 +190,7 @@ export function subscribeToConfigUpdates(callback: (displays: DisplayConfig[]) =
               localDisplays.length === metaRows.length
             ) {
               lastKnownMetaString = currentMetaStr;
+              recordSyncCheckResult(metaRows.length).catch(() => {});
               return;
             }
 
@@ -210,6 +213,7 @@ export function subscribeToConfigUpdates(callback: (displays: DisplayConfig[]) =
                 saveDisplaysToDb(merged).catch(() => {});
                 safeSetLocalStorage(STORAGE_KEY, merged);
                 callback(merged);
+                recordSyncCheckResult(merged.length).catch(() => {});
                 return;
               }
             }
@@ -220,6 +224,7 @@ export function subscribeToConfigUpdates(callback: (displays: DisplayConfig[]) =
               saveDisplaysToDb(cloudData).catch(() => {});
               safeSetLocalStorage(STORAGE_KEY, cloudData);
               callback(cloudData);
+              recordSyncCheckResult(cloudData.length).catch(() => {});
               return;
             }
           }
@@ -242,6 +247,7 @@ export function subscribeToConfigUpdates(callback: (displays: DisplayConfig[]) =
               safeSetLocalStorage(STORAGE_KEY, normalized);
               callback(normalized);
             }
+            recordSyncCheckResult(normalized.length).catch(() => {});
           }
         }
       }

@@ -97,7 +97,17 @@ export function updateSyncStatus(status: ConnectionStatus, message?: string) {
 }
 
 /**
- * Initialize Sync Manager - loads last saved metadata and wires up online/offline listeners
+ * Initialize Sync Manager - loads last saved metadata and wires up online/offline
+ * status tracking.
+ *
+ * This does NOT run its own polling loop or its own visibilitychange/online-triggered
+ * fetch anymore — api.ts's subscribeToConfigUpdates() already listens for the same
+ * `online`/`visibilitychange` events and runs its own poll (plus a realtime
+ * subscription), and previously both systems fired independently on every one of
+ * those triggers. Instead, that single surviving check now calls
+ * recordSyncCheckResult() below to keep this module's status (used for the TV/admin
+ * "last synced" badge) fresh, so there's one source of truth instead of two parallel
+ * differential-sync implementations racing each other.
  */
 export async function initSyncManager(): Promise<void> {
   if (typeof window === 'undefined') return;
@@ -110,12 +120,12 @@ export async function initSyncManager(): Promise<void> {
     }
   } catch {}
 
+  // The browser already tells us this for free (no network round-trip needed), so
+  // the status flips instantly. The actual re-sync on reconnect is api.ts's job.
   const handleOnline = () => {
-    console.log('⚡ [SyncManager] Network online detected. Triggering smart sync...');
     currentState.status = 'ONLINE';
     currentState.message = 'Koneksi internet terhubung';
     notifyListeners();
-    triggerBackgroundSync();
   };
 
   const handleOffline = () => {
@@ -127,20 +137,25 @@ export async function initSyncManager(): Promise<void> {
 
   window.addEventListener('online', handleOnline);
   window.addEventListener('offline', handleOffline);
+}
 
-  // Re-check when window gains focus or visibility (e.g. TV wakes up)
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible' && navigator.onLine) {
-      triggerBackgroundSync();
-    }
-  });
-
-  // Periodic lightweight check (every 45 seconds when online)
-  setInterval(() => {
-    if (navigator.onLine && currentState.status !== 'SYNCING') {
-      triggerBackgroundSync();
-    }
-  }, 45000);
+/**
+ * Called by api.ts's differential-check loop (and its realtime callback) after it
+ * completes a check or applies an update — whether or not that check found changes —
+ * so the sync status badge stays fresh without this module running its own duplicate
+ * poll/event listeners.
+ */
+export async function recordSyncCheckResult(displayCount: number): Promise<void> {
+  const now = Date.now();
+  currentState.status = 'ONLINE';
+  currentState.lastSyncTimestamp = now;
+  currentState.lastSyncFormatted = formatSyncDate(now);
+  currentState.cachedDisplayCount = displayCount;
+  currentState.message = 'Sinkron • Data lokal sudah yang terbaru';
+  notifyListeners();
+  try {
+    await setDbMetadata('last_sync_timestamp', now);
+  } catch {}
 }
 
 // Background sync lock
