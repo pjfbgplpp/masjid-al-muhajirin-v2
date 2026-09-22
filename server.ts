@@ -2,7 +2,6 @@ import 'dotenv/config';
 import express from 'express';
 import path from 'path';
 import fs from 'fs';
-import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { DEFAULT_DISPLAYS } from './src/data/defaultConfig';
@@ -524,6 +523,12 @@ Kembalikan JSON saja tanpa formatting markdown luar.`;
 
 async function startServer() {
   if (process.env.NODE_ENV !== 'production') {
+    // Dynamic import: keeps `vite` (and the esbuild/rollup it pulls in) out of the
+    // Vercel serverless function bundle entirely. This branch never runs there
+    // anyway (guarded by `if (!process.env.VERCEL)` below), but a static top-level
+    // `import ... from 'vite'` would still be evaluated and bundled on every
+    // /api/* invocation regardless.
+    const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true, hmr: false },
       appType: 'spa',
