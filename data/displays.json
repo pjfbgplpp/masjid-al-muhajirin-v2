@@ -61,113 +61,6 @@
       "runningTextFontSize": "xl",
       "showNextPrayerCountdown": true
     },
-    "slides": [
-      {
-        "id": "slide-1",
-        "order": 1,
-        "title": "Kajian Rutin",
-        "category": "kajian",
-        "imageUrl": "https://nnezswtzdoarmzhvtzmt.supabase.co/storage/v1/object/public/display-media/MASJID-1/slides/slide-1-1789975497697.jpg",
-        "isActive": false,
-        "badgeText": "KAJIAN RUTIN AHAD",
-        "arabicText": "",
-        "description": "1. Setiap Hari Ahad Minggu Terakhir \n2. Setiap Minggu Ke Dua",
-        "titleFontSize": "auto",
-        "arabicFontSize": "auto",
-        "durationSeconds": 12,
-        "descriptionFontSize": "auto"
-      },
-      {
-        "id": "slide-1788489231876",
-        "order": 2,
-        "title": "Surat Al-Baqarah Ayat 153",
-        "category": "hadith",
-        "imageUrl": "https://nnezswtzdoarmzhvtzmt.supabase.co/storage/v1/object/public/display-media/MASJID-1/slides/slide-1788489231876-1789975498203.jpg",
-        "isActive": true,
-        "badgeText": "QURAN",
-        "arabicText": "يَٰٓأَيُّهَا ٱلَّذِينَ ءَامَنُوا۟ ٱسْتَعِينُوا۟ بِٱلصَّبْرِ وَٱلصَّلَوٰةِ ۚ إِنَّ ٱللَّهَ مَعَ ٱلصَّٰبِرِينَ",
-        "description": "\"Hai orang-orang yang beriman, jadikanlah sabar dan sholat sebagai penolongmu, sesungguhnya Allah beserta orang-orang yang sabar\"",
-        "titleFontSize": "auto",
-        "arabicFontSize": "auto",
-        "durationSeconds": 12,
-        "descriptionFontSize": "auto"
-      },
-      {
-        "id": "slide-1788504586131",
-        "order": 3,
-        "title": "Poster Informasi Kegiatan Masjid",
-        "category": "custom",
-        "imageUrl": "https://nnezswtzdoarmzhvtzmt.supabase.co/storage/v1/object/public/display-media/MASJID-1/slides/slide-1788504586131-1789975498930.jpg",
-        "isActive": false,
-        "badgeText": "INFORMASI MASJID",
-        "arabicText": "",
-        "description": "Hadirilah Peringatan Maulid Nabi Muhammad SAW 1448 H/2026 \n12 September 2026, \nPenceramah : Ustadz Abdul Aziz\nTema \" Meneladani Sifat Rasulullah Guna Mewujudkan Generasi Berakhlak Mulia\"",
-        "titleFontSize": "auto",
-        "arabicFontSize": "auto",
-        "durationSeconds": 12,
-        "descriptionFontSize": "auto"
-      },
-      {
-        "id": "slide-1789108365437",
-        "order": 4,
-        "title": "Pengumuman Petugas Khotib Jum'at",
-        "category": "announcement",
-        "imageUrl": "https://nnezswtzdoarmzhvtzmt.supabase.co/storage/v1/object/public/display-media/MASJID-1/slides/slide-1789108365437-1789975499523.jpg",
-        "isActive": false,
-        "badgeText": "PENGUMUMAN JUMAT",
-        "arabicText": "",
-        "description": "• Khotib & Imam : .............................\n• Muadzin : .....................................",
-        "titleFontSize": "auto",
-        "arabicFontSize": "auto",
-        "durationSeconds": 12,
-        "descriptionFontSize": "auto"
-      },
-      {
-        "id": "slide-1788504712826",
-        "order": 5,
-        "title": "Laporan Kas",
-        "category": "donation",
-        "imageUrl": "https://nnezswtzdoarmzhvtzmt.supabase.co/storage/v1/object/public/display-media/MASJID-1/slides/slide-1788504712826-1789975499952.jpg",
-        "isActive": true,
-        "badgeText": "KAS & INFAQ",
-        "arabicText": "",
-        "description": "Saldo Kas Operasional Masjid Al Muhajirin :\n1. Saldo  10 Sept 2026, Rp. 15.558.985 \n2. Pemasukan Rp. 1.041.000\n3. Pengeluaran Rp. 2.323.150\n4. Saldo 17 Sept 2026 : Rp. 14.276.835",
-        "titleFontSize": "auto",
-        "arabicFontSize": "auto",
-        "durationSeconds": 12,
-        "descriptionFontSize": "auto"
-      },
-      {
-        "id": "slide-1788504668450",
-        "order": 6,
-        "title": "Poster Informasi Kegiatan Masjid",
-        "category": "custom",
-        "imageUrl": "https://nnezswtzdoarmzhvtzmt.supabase.co/storage/v1/object/public/display-media/MASJID-1/slides/slide-1788504668450-1789975500716.jpg",
-        "isActive": true,
-        "badgeText": "INFORMASI MASJID",
-        "arabicText": "",
-        "description": "Mari bersama memakmurkan masjid dengan menghadiri majelis ilmu dan sholat berjamaah.",
-        "titleFontSize": "auto",
-        "arabicFontSize": "auto",
-        "durationSeconds": 12,
-        "descriptionFontSize": "auto"
-      },
-      {
-        "id": "slide-3",
-        "order": 7,
-        "title": "Adab Berada di Dalam Masjid",
-        "category": "hadith",
-        "imageUrl": "https://nnezswtzdoarmzhvtzmt.supabase.co/storage/v1/object/public/display-media/MASJID-1/slides/slide-3-1789975501304.jpg",
-        "isActive": true,
-        "badgeText": "MUTIARA HADITS",
-        "arabicText": "",
-        "description": "\"Jika salah seorang di antara kalian masuk masjid, janganlah duduk sebelum sholat dua rakaat (tahiyyatul masjid).\" (HR. Bukhari & Muslim)",
-        "titleFontSize": "auto",
-        "arabicFontSize": "auto",
-        "durationSeconds": 12,
-        "descriptionFontSize": "auto"
-      }
-    ],
     "isActive": true,
     "location": {
       "city": "Bekasi",
@@ -183,44 +76,8 @@
       "calculationMethod": "KEMENAG"
     },
     "createdAt": "2026-09-04T02:18:28.967+00:00",
-    "updatedAt": "2026-09-21T07:25:02.919+00:00",
+    "updatedAt": "2026-09-21T08:37:28.263313+00:00",
     "description": "Layar LED TV 65\" di shaf depan ruang utama jamaah.",
-    "runningTexts": [
-      {
-        "id": "rt-1",
-        "text": "SELAMAT DATANG DI MASJID AL MUHAJIRIN • MOHON NONAKTIFKAN ATAU ALIKHKAN HP KE MODE HENING (SILENT) SAAT SHALAT",
-        "order": 1,
-        "isActive": true
-      },
-      {
-        "id": "rt-2",
-        "text": "LURUSKAN DAN RAPATKAN SHAF KARENA KELURUSAN SHAF MERUPAKAN BAGIAN DARI KESEMPURNAAN SHALAT (HR. BUKHARI & MUSLIM)",
-        "order": 2,
-        "isActive": true
-      }
-    ],
-    "announcements": [
-      {
-        "id": "ann-1",
-        "date": "Sabtu, 22 Agustus 2026",
-        "time": "09:00 - 11:30 WIB",
-        "title": "Kajian Tematik Parenting Islami",
-        "content": "Mendidik Generasi Shalih di Era Digital. Bersama Ustadzah Hj. Fatimah, S.Psi.",
-        "speaker": "Ustadzah Hj. Fatimah, S.Psi",
-        "category": "tarbiyah",
-        "isActive": true
-      },
-      {
-        "id": "ann-2",
-        "date": "Jum'at, 21 Agustus 2026",
-        "time": "11:45 WIB",
-        "title": "Khotib & Imam Shalat Jum'at",
-        "content": "Khatib: Prof. Dr. KH. Mahmud Yunus, MA. Imam: Ustadz M. Syakir, Al-Hafizh.",
-        "speaker": "Prof. Dr. KH. Mahmud Yunus, MA",
-        "category": "jumat",
-        "isActive": true
-      }
-    ],
     "prayerAdjustments": {
       "asr": 4,
       "fajr": 4,
@@ -251,6 +108,149 @@
         "jumuah": 30,
         "maghrib": 7
       }
-    }
+    },
+    "slides": [
+      {
+        "id": "slide-1",
+        "title": "Kajian Rutin",
+        "description": "1. Setiap Hari Ahad Minggu Terakhir \n2. Setiap Minggu Ke Dua",
+        "arabicText": "",
+        "imageUrl": "https://nnezswtzdoarmzhvtzmt.supabase.co/storage/v1/object/public/display-media/MASJID-1/slides/slide-1-1789975497697.jpg",
+        "durationSeconds": 12,
+        "isActive": false,
+        "order": 1,
+        "category": "kajian",
+        "badgeText": "KAJIAN RUTIN AHAD",
+        "titleFontSize": "auto",
+        "descriptionFontSize": "auto",
+        "arabicFontSize": "auto"
+      },
+      {
+        "id": "slide-1788489231876",
+        "title": "Surat Al-Baqarah Ayat 153",
+        "description": "\"Hai orang-orang yang beriman, jadikanlah sabar dan sholat sebagai penolongmu, sesungguhnya Allah beserta orang-orang yang sabar\"",
+        "arabicText": "يَٰٓأَيُّهَا ٱلَّذِينَ ءَامَنُوا۟ ٱسْتَعِينُوا۟ بِٱلصَّبْرِ وَٱلصَّلَوٰةِ ۚ إِنَّ ٱللَّهَ مَعَ ٱلصَّٰبِرِينَ",
+        "imageUrl": "https://nnezswtzdoarmzhvtzmt.supabase.co/storage/v1/object/public/display-media/MASJID-1/slides/slide-1788489231876-1789975498203.jpg",
+        "durationSeconds": 12,
+        "isActive": true,
+        "order": 2,
+        "category": "hadith",
+        "badgeText": "QURAN",
+        "titleFontSize": "auto",
+        "descriptionFontSize": "auto",
+        "arabicFontSize": "auto"
+      },
+      {
+        "id": "slide-1788504586131",
+        "title": "Poster Informasi Kegiatan Masjid",
+        "description": "Hadirilah Peringatan Maulid Nabi Muhammad SAW 1448 H/2026 \n12 September 2026, \nPenceramah : Ustadz Abdul Aziz\nTema \" Meneladani Sifat Rasulullah Guna Mewujudkan Generasi Berakhlak Mulia\"",
+        "arabicText": "",
+        "imageUrl": "https://nnezswtzdoarmzhvtzmt.supabase.co/storage/v1/object/public/display-media/MASJID-1/slides/slide-1788504586131-1789975498930.jpg",
+        "durationSeconds": 12,
+        "isActive": false,
+        "order": 3,
+        "category": "custom",
+        "badgeText": "INFORMASI MASJID",
+        "titleFontSize": "auto",
+        "descriptionFontSize": "auto",
+        "arabicFontSize": "auto"
+      },
+      {
+        "id": "slide-1789108365437",
+        "title": "Pengumuman Petugas Khotib Jum'at",
+        "description": "• Khotib & Imam : .............................\n• Muadzin : .....................................",
+        "arabicText": "",
+        "imageUrl": "https://nnezswtzdoarmzhvtzmt.supabase.co/storage/v1/object/public/display-media/MASJID-1/slides/slide-1789108365437-1789975499523.jpg",
+        "durationSeconds": 12,
+        "isActive": false,
+        "order": 4,
+        "category": "announcement",
+        "badgeText": "PENGUMUMAN JUMAT",
+        "titleFontSize": "auto",
+        "descriptionFontSize": "auto",
+        "arabicFontSize": "auto"
+      },
+      {
+        "id": "slide-1788504712826",
+        "title": "Laporan Kas",
+        "description": "Saldo Kas Operasional Masjid Al Muhajirin :\n1. Saldo  10 Sept 2026, Rp. 15.558.985 \n2. Pemasukan Rp. 1.041.000\n3. Pengeluaran Rp. 2.323.150\n4. Saldo 17 Sept 2026 : Rp. 14.276.835",
+        "arabicText": "",
+        "imageUrl": "https://nnezswtzdoarmzhvtzmt.supabase.co/storage/v1/object/public/display-media/MASJID-1/slides/slide-1788504712826-1789975499952.jpg",
+        "durationSeconds": 12,
+        "isActive": true,
+        "order": 5,
+        "category": "donation",
+        "badgeText": "KAS & INFAQ",
+        "titleFontSize": "auto",
+        "descriptionFontSize": "auto",
+        "arabicFontSize": "auto"
+      },
+      {
+        "id": "slide-1788504668450",
+        "title": "Poster Informasi Kegiatan Masjid",
+        "description": "Mari bersama memakmurkan masjid dengan menghadiri majelis ilmu dan sholat berjamaah.",
+        "arabicText": "",
+        "imageUrl": "https://nnezswtzdoarmzhvtzmt.supabase.co/storage/v1/object/public/display-media/MASJID-1/slides/slide-1788504668450-1789975500716.jpg",
+        "durationSeconds": 12,
+        "isActive": true,
+        "order": 6,
+        "category": "custom",
+        "badgeText": "INFORMASI MASJID",
+        "titleFontSize": "auto",
+        "descriptionFontSize": "auto",
+        "arabicFontSize": "auto"
+      },
+      {
+        "id": "slide-3",
+        "title": "Adab Berada di Dalam Masjid",
+        "description": "\"Jika salah seorang di antara kalian masuk masjid, janganlah duduk sebelum sholat dua rakaat (tahiyyatul masjid).\" (HR. Bukhari & Muslim)",
+        "arabicText": "",
+        "imageUrl": "https://nnezswtzdoarmzhvtzmt.supabase.co/storage/v1/object/public/display-media/MASJID-1/slides/slide-3-1789975501304.jpg",
+        "durationSeconds": 12,
+        "isActive": true,
+        "order": 7,
+        "category": "hadith",
+        "badgeText": "MUTIARA HADITS",
+        "titleFontSize": "auto",
+        "descriptionFontSize": "auto",
+        "arabicFontSize": "auto"
+      }
+    ],
+    "announcements": [
+      {
+        "id": "ann-1",
+        "title": "Kajian Tematik Parenting Islami",
+        "content": "Mendidik Generasi Shalih di Era Digital. Bersama Ustadzah Hj. Fatimah, S.Psi.",
+        "date": "Sabtu, 22 Agustus 2026",
+        "time": "09:00 - 11:30 WIB",
+        "speaker": "Ustadzah Hj. Fatimah, S.Psi",
+        "category": "tarbiyah",
+        "isActive": true
+      },
+      {
+        "id": "ann-2",
+        "title": "Khotib & Imam Shalat Jum'at",
+        "content": "Khatib: Prof. Dr. KH. Mahmud Yunus, MA. Imam: Ustadz M. Syakir, Al-Hafizh.",
+        "date": "Jum'at, 21 Agustus 2026",
+        "time": "11:45 WIB",
+        "speaker": "Prof. Dr. KH. Mahmud Yunus, MA",
+        "category": "jumat",
+        "isActive": true
+      }
+    ],
+    "runningTexts": [
+      {
+        "id": "rt-1",
+        "text": "SELAMAT DATANG DI MASJID AL MUHAJIRIN • MOHON NONAKTIFKAN ATAU ALIKHKAN HP KE MODE HENING (SILENT) SAAT SHALAT",
+        "isActive": true,
+        "order": 1
+      },
+      {
+        "id": "rt-2",
+        "text": "LURUSKAN DAN RAPATKAN SHAF KARENA KELURUSAN SHAF MERUPAKAN BAGIAN DARI KESEMPURNAAN SHALAT (HR. BUKHARI & MUSLIM)",
+        "isActive": true,
+        "order": 2
+      }
+    ]
   }
 ]

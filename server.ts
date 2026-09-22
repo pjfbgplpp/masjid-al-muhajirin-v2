@@ -7,6 +7,12 @@ import { GoogleGenAI } from '@google/genai';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { DEFAULT_DISPLAYS } from './src/data/defaultConfig';
 import { DisplayConfig } from './src/types';
+import {
+  buildDisplayDataColumn,
+  assembleDisplayConfig,
+  saveDisplayChildren,
+  DISPLAY_SELECT_WITH_CHILDREN,
+} from './src/services/displayRowMapper';
 
 const app = express();
 const PORT = 3000;
@@ -46,16 +52,18 @@ async function syncDisplayToSupabaseServer(display: DisplayConfig): Promise<void
   if (!sb) return;
   try {
     const cleanCode = (display.code || 'MASJID-01').trim().toUpperCase();
+    const id = display.id || `display-${cleanCode.toLowerCase()}`;
     await sb.from('displays').upsert(
       {
-        id: display.id || `display-${cleanCode.toLowerCase()}`,
+        id,
         code: cleanCode,
         name: display.name || 'Masjid Utama',
-        data: display,
+        data: buildDisplayDataColumn(display),
         updated_at: display.updatedAt || new Date().toISOString(),
       },
       { onConflict: 'code' }
     );
+    await saveDisplayChildren(sb, display, id);
   } catch (err) {
     console.warn('[Server Supabase] Upsert warning:', err);
   }
@@ -69,10 +77,11 @@ async function syncBulkDisplaysToSupabaseServer(displays: DisplayConfig[]): Prom
       id: d.id || `display-${(d.code || 'MASJID-01').toLowerCase().trim()}`,
       code: (d.code || 'MASJID-01').trim().toUpperCase(),
       name: d.name || 'Masjid Utama',
-      data: d,
+      data: buildDisplayDataColumn(d),
       updated_at: d.updatedAt || new Date().toISOString(),
     }));
     await sb.from('displays').upsert(rows, { onConflict: 'code' });
+    await Promise.all(displays.map((d, i) => saveDisplayChildren(sb, d, rows[i].id)));
     console.log(`✓ [Server Supabase] Synced ${displays.length} displays to Supabase table.`);
   } catch (err) {
     console.warn('[Server Supabase] Bulk upsert warning:', err);
@@ -127,15 +136,14 @@ async function syncFromSupabaseOnStartup(): Promise<void> {
   const sb = getServerSupabase();
   if (!sb) return;
   try {
-    const { data, error } = await sb.from('displays').select('*').order('code', { ascending: true });
+    const { data, error } = await sb
+      .from('displays')
+      .select(DISPLAY_SELECT_WITH_CHILDREN)
+      .order('code', { ascending: true });
     if (!error && data && data.length > 0) {
-      memoryDisplays = data.map((row: any) => ({
-        ...(row.data || {}),
-        id: row.id || row.data?.id,
-        code: (row.code || row.data?.code || 'MASJID-01').trim().toUpperCase(),
-        name: row.name || row.data?.name || 'Masjid Utama',
-        updatedAt: row.updated_at || row.data?.updatedAt || new Date().toISOString(),
-      }));
+      memoryDisplays = (data as any[]).map((row) =>
+        assembleDisplayConfig(row, row.slides || [], row.announcements || [], row.running_texts || [])
+      );
       saveDataFile(memoryDisplays);
       console.log(
         `✓ [Server Startup] Synced ${memoryDisplays.length} displays from Supabase:`,
@@ -243,18 +251,17 @@ app.post('/api/supabase/sync', async (req, res) => {
         displays: memoryDisplays,
       });
     } else if (action === 'pull') {
-      const { data, error } = await sb.from('displays').select('*').order('code', { ascending: true });
+      const { data, error } = await sb
+        .from('displays')
+        .select(DISPLAY_SELECT_WITH_CHILDREN)
+        .order('code', { ascending: true });
       if (error) {
         return res.status(500).json({ error: error.message });
       }
       if (data && data.length > 0) {
-        memoryDisplays = data.map((row: any) => ({
-          ...(row.data || {}),
-          id: row.id || row.data?.id,
-          code: (row.code || row.data?.code || 'MASJID-01').trim().toUpperCase(),
-          name: row.name || row.data?.name || 'Masjid Utama',
-          updatedAt: row.updated_at || row.data?.updatedAt || new Date().toISOString(),
-        }));
+        memoryDisplays = (data as any[]).map((row) =>
+          assembleDisplayConfig(row, row.slides || [], row.announcements || [], row.running_texts || [])
+        );
         saveDataFile(memoryDisplays);
         return res.json({
           message: `Berhasil menarik ${data.length} display dari Supabase.`,
@@ -277,15 +284,14 @@ app.get('/api/displays', async (req, res) => {
   const sb = getServerSupabase();
   if (sb) {
     try {
-      const { data, error } = await sb.from('displays').select('*').order('code', { ascending: true });
+      const { data, error } = await sb
+        .from('displays')
+        .select(DISPLAY_SELECT_WITH_CHILDREN)
+        .order('code', { ascending: true });
       if (!error && data && data.length > 0) {
-        memoryDisplays = data.map((row: any) => ({
-          ...(row.data || {}),
-          id: row.id || row.data?.id,
-          code: (row.code || row.data?.code || 'MASJID-01').trim().toUpperCase(),
-          name: row.name || row.data?.name || 'Masjid Utama',
-          updatedAt: row.updated_at || row.data?.updatedAt || new Date().toISOString(),
-        }));
+        memoryDisplays = (data as any[]).map((row) =>
+          assembleDisplayConfig(row, row.slides || [], row.announcements || [], row.running_texts || [])
+        );
         saveDataFile(memoryDisplays);
         return res.json(memoryDisplays);
       }
@@ -324,15 +330,14 @@ app.get('/api/displays/:code', async (req, res) => {
   const sb = getServerSupabase();
   if (sb) {
     try {
-      const { data, error } = await sb.from('displays').select('*').ilike('code', code).maybeSingle();
+      const { data, error } = await sb
+        .from('displays')
+        .select(DISPLAY_SELECT_WITH_CHILDREN)
+        .ilike('code', code)
+        .maybeSingle();
       if (!error && data) {
-        const item: DisplayConfig = {
-          ...(data.data || {}),
-          id: data.id || data.data?.id,
-          code: (data.code || data.data?.code || code).trim().toUpperCase(),
-          name: data.name || data.data?.name || 'Masjid Utama',
-          updatedAt: data.updated_at || data.data?.updatedAt || new Date().toISOString(),
-        };
+        const row = data as any;
+        const item = assembleDisplayConfig(row, row.slides || [], row.announcements || [], row.running_texts || []);
         return res.json(item);
       }
     } catch (err) {

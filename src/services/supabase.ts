@@ -2,6 +2,15 @@ import { createClient, SupabaseClient, RealtimeChannel } from '@supabase/supabas
 import { DisplayConfig } from '../types';
 import { normalizeDisplayConfig } from './api';
 import { loadDisplaysFromDb } from './storageDb';
+import {
+  buildDisplayDataColumn,
+  assembleDisplayConfig,
+  saveDisplayChildren,
+  DISPLAY_SELECT_WITH_CHILDREN,
+  SlideRow,
+  AnnouncementRow,
+  RunningTextRow,
+} from './displayRowMapper';
 
 const LOCAL_STORAGE_SUPABASE_URL = 'masjid_tv_supabase_url';
 const LOCAL_STORAGE_SUPABASE_KEY = 'masjid_tv_supabase_anon_key';
@@ -162,10 +171,18 @@ export interface SupabaseRow {
   data: any;
   created_at?: string;
   updated_at?: string;
+  // Present only when the row was fetched with nested embeds
+  // (select=*,slides(*),announcements(*),running_texts(*)).
+  slides?: SlideRow[];
+  announcements?: AnnouncementRow[];
+  running_texts?: RunningTextRow[];
 }
 
 /**
- * Format DisplayConfig into Supabase row format
+ * Format DisplayConfig into Supabase row format. Only the 1:1 config fields
+ * (theme, layout, location, ...) go into `data` — slides/announcements/
+ * runningTexts live in their own tables and are written separately by
+ * syncChildRows (see saveSingleDisplayToSupabase / saveAllDisplaysToSupabase).
  */
 export function formatDisplayForSupabase(display: DisplayConfig): SupabaseRow {
   const cleanCode = (display.code || 'MASJID-01').trim().toUpperCase();
@@ -176,25 +193,24 @@ export function formatDisplayForSupabase(display: DisplayConfig): SupabaseRow {
     id,
     code: cleanCode,
     name: display.name || 'Masjid Utama',
-    data: JSON.parse(JSON.stringify(display)),
+    data: JSON.parse(JSON.stringify(buildDisplayDataColumn(display))),
     created_at: display.createdAt || now,
     updated_at: display.updatedAt || now,
   };
 }
 
 /**
- * Convert a Supabase row back to DisplayConfig
+ * Convert a Supabase row (optionally with nested slides/announcements/
+ * running_texts embeds) back to a full DisplayConfig.
  */
 export function parseSupabaseRow(row: SupabaseRow): DisplayConfig {
-  const rowData = row.data && typeof row.data === 'object' ? row.data : {};
-  return normalizeDisplayConfig({
-    ...rowData,
-    id: row.id || rowData.id,
-    code: (row.code || rowData.code || 'MASJID-01').trim().toUpperCase(),
-    name: row.name || rowData.name || 'Masjid Utama',
-    createdAt: row.created_at || rowData.createdAt,
-    updatedAt: row.updated_at || rowData.updatedAt || new Date().toISOString(),
-  });
+  const assembled = assembleDisplayConfig(
+    row,
+    row.slides || [],
+    row.announcements || [],
+    row.running_texts || []
+  );
+  return normalizeDisplayConfig(assembled);
 }
 
 /**
@@ -251,7 +267,7 @@ export async function fetchDisplaysFromSupabase(): Promise<DisplayConfig[] | nul
   try {
     const { data, error } = await supabase
       .from('displays')
-      .select('*')
+      .select(DISPLAY_SELECT_WITH_CHILDREN)
       .order('code', { ascending: true });
 
     if (error) {
@@ -260,7 +276,7 @@ export async function fetchDisplaysFromSupabase(): Promise<DisplayConfig[] | nul
     }
 
     if (data && data.length > 0) {
-      return (data as SupabaseRow[]).map(parseSupabaseRow);
+      return (data as unknown as SupabaseRow[]).map(parseSupabaseRow);
     }
     return [];
   } catch (err) {
@@ -280,12 +296,12 @@ export async function fetchSingleDisplayFromSupabase(code: string): Promise<Disp
     const cleanCode = (code || 'MASJID-01').trim().toUpperCase();
     const { data, error } = await supabase
       .from('displays')
-      .select('*')
+      .select(DISPLAY_SELECT_WITH_CHILDREN)
       .eq('code', cleanCode)
       .maybeSingle();
 
     if (error || !data) return null;
-    return parseSupabaseRow(data as SupabaseRow);
+    return parseSupabaseRow(data as unknown as SupabaseRow);
   } catch (err) {
     console.warn('⚠️ [Supabase] Single fetch exception:', err);
     return null;
@@ -309,6 +325,9 @@ export async function saveSingleDisplayToSupabase(display: DisplayConfig): Promi
       console.error('❌ [Supabase] Upsert single display error:', error.message);
       return false;
     }
+
+    await saveDisplayChildren(supabase, display, row.id);
+
     console.log(`✓ [Supabase] Display "${display.code}" berhasil disimpan ke Supabase.`);
     return true;
   } catch (err) {
@@ -334,6 +353,11 @@ export async function saveAllDisplaysToSupabase(displays: DisplayConfig[]): Prom
       console.error('❌ [Supabase] Upsert bulk displays error:', error.message);
       return false;
     }
+
+    await Promise.all(
+      displays.map((display, i) => saveDisplayChildren(supabase, display, rows[i].id))
+    );
+
     console.log(`✓ [Supabase] ${displays.length} displays berhasil disinkronkan ke Supabase.`);
     return true;
   } catch (err) {
@@ -369,7 +393,9 @@ export async function deleteDisplayFromSupabase(code: string): Promise<boolean> 
 }
 
 /**
- * Realtime Subscription for Postgres Changes on `displays` table (Ultra-efficient zero-HTTP streaming)
+ * Realtime Subscription for Postgres Changes on `displays` table (INSERT/UPDATE re-fetch
+ * the single display with its slides/announcements/running_texts joins; DELETE stays
+ * zero-HTTP since it only needs the code/id already in the payload)
  */
 export function subscribeToSupabaseDisplays(
   onUpdate: (displays: DisplayConfig[]) => void,
@@ -392,29 +418,11 @@ export function subscribeToSupabaseDisplays(
             console.log('⚡ [Supabase Realtime] Event detected:', payload.eventType);
 
             try {
-              // 1. Zero-HTTP Optimization: Extract display directly from Realtime payload
               const newRow = payload.new as SupabaseRow | undefined;
               const oldRow = payload.old as SupabaseRow | undefined;
 
-              if (newRow && newRow.data && typeof newRow.data === 'object') {
-                const updatedDisplay = parseSupabaseRow(newRow);
-                const localDisplays = (await loadDisplaysFromDb()) || [];
-                const idx = localDisplays.findIndex(
-                  (d) => d.code.toUpperCase() === updatedDisplay.code.toUpperCase()
-                );
-                let merged: DisplayConfig[];
-                if (idx >= 0) {
-                  merged = [...localDisplays];
-                  merged[idx] = updatedDisplay;
-                } else {
-                  merged = [...localDisplays, updatedDisplay];
-                }
-                console.log(`⚡ [Supabase Realtime] Applied zero-HTTP update for ${updatedDisplay.code}`);
-                onUpdate(merged);
-                return;
-              }
-
-              // 2. Zero-HTTP Delete handler
+              // 1. Zero-HTTP Delete handler: the row itself carries everything needed
+              //    (code/id), no join required, so this can stay a local-only filter.
               if (payload.eventType === 'DELETE' && oldRow) {
                 const targetCode = (oldRow.code || '').trim().toUpperCase();
                 const localDisplays = (await loadDisplaysFromDb()) || [];
@@ -426,7 +434,12 @@ export function subscribeToSupabaseDisplays(
                 return;
               }
 
-              // 3. Fallback: Fetch ONLY the single changed display if code is available
+              // 2. INSERT/UPDATE: the payload's `new` never carries joined slides/
+              //    announcements/running_texts (Postgres replication only sends the
+              //    row's own columns), and those fields also touch this same
+              //    "displays" row via the touch_display_updated_at trigger without
+              //    changing `data` at all. So a single fresh fetch with joins is
+              //    required here — it can't be reconstructed from the payload alone.
               const targetCode = (newRow?.code || '').trim().toUpperCase();
               if (targetCode) {
                 const single = await fetchSingleDisplayFromSupabase(targetCode);
@@ -448,7 +461,7 @@ export function subscribeToSupabaseDisplays(
                 }
               }
 
-              // 4. Absolute fallback: Fetch full list if all else fails
+              // 3. Absolute fallback: Fetch full list if all else fails
               const fresh = await fetchDisplaysFromSupabase();
               if (fresh && fresh.length > 0) {
                 onUpdate(fresh);
