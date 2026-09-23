@@ -334,10 +334,18 @@ export const TvDisplayScreen: React.FC<TvDisplayScreenProps> = ({
     return 'font-sans';
   };
 
-  // Safe area padding
-  const safeAreaStyle = config.layout.enableSafeArea
-    ? { padding: `clamp(8px, ${config.layout.safeAreaPercent || 3}vmin, 24px)` }
-    : { padding: '12px' };
+  // Safe area inset, sized to survive TV overscan (many consumer TVs crop 3-5% of
+  // each edge over HDMI unless "Just Scan"/"Screen Fit" is enabled).
+  //
+  // Sized per axis on purpose: overscan crops a percentage of width and height
+  // independently, so vw/vh track it, while the previous single vmin value took the
+  // shorter side for both — on 1080p that made a "3%" setting only 1.7% of the width.
+  // The old 24px upper clamp also capped everything at ~2.2% on 1080p, so raising the
+  // percentage in the admin panel had no visible effect past that point.
+  const safeAreaPct = config.layout.safeAreaPercent || 3;
+  const safeAreaInsetX = config.layout.enableSafeArea ? `clamp(8px, ${safeAreaPct}vw, 160px)` : '12px';
+  const safeAreaInsetY = config.layout.enableSafeArea ? `clamp(8px, ${safeAreaPct}vh, 96px)` : '12px';
+  const safeAreaStyle = { padding: `${safeAreaInsetY} ${safeAreaInsetX}` };
 
   // Current Slide
   const currentSlide = activeSlides[currentSlideIndex] || activeSlides[0];
@@ -1778,7 +1786,10 @@ export const TvDisplayScreen: React.FC<TvDisplayScreenProps> = ({
 
       {/* FLOATING CONTROLS (Only visible on hover/tap/mouse move for TV operators) */}
       {!isPreview && (
-        <div className="absolute top-2 right-2 z-40 opacity-30 hover:opacity-100 transition-opacity flex items-center gap-2 bg-black/85 backdrop-blur-md p-1.5 rounded-xl border border-white/20 shadow-2xl">
+        <div
+          style={{ top: safeAreaInsetY, right: safeAreaInsetX }}
+          className="absolute z-40 opacity-30 hover:opacity-100 transition-opacity flex items-center gap-2 bg-black/85 backdrop-blur-md p-1.5 rounded-xl border border-white/20 shadow-2xl"
+        >
           <div
             title={`Status: ${syncState.status} | Terakhir sinkron: ${
               syncState.lastSyncTime ? new Date(syncState.lastSyncTime).toLocaleTimeString('id-ID') : 'Baru saja'
