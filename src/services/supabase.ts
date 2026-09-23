@@ -1,7 +1,6 @@
 import { createClient, SupabaseClient, RealtimeChannel } from '@supabase/supabase-js';
 import { DisplayConfig } from '../types';
 import { normalizeDisplayConfig } from './api';
-import { loadDisplaysFromDb } from './storageDb';
 import {
   buildDisplayDataColumn,
   assembleDisplayConfig,
@@ -11,9 +10,6 @@ import {
   AnnouncementRow,
   RunningTextRow,
 } from './displayRowMapper';
-
-const LOCAL_STORAGE_SUPABASE_URL = 'masjid_tv_supabase_url';
-const LOCAL_STORAGE_SUPABASE_KEY = 'masjid_tv_supabase_anon_key';
 
 // Helper to get environment variables safely
 const getEnvVar = (key: string): string => {
@@ -34,7 +30,9 @@ let serverApiConfigPromise: Promise<SupabaseConfigCredentials | null> | null = n
 let cachedServerApiConfig: SupabaseConfigCredentials | null = null;
 
 /**
- * Auto-fetch Supabase configuration from server environment
+ * Auto-fetch Supabase configuration from server environment. Cached only in
+ * memory (module-level variable) for the lifetime of this tab — not persisted,
+ * so a Supabase project migration can't leave a device stuck on stale credentials.
  */
 export async function fetchServerSupabaseConfig(): Promise<SupabaseConfigCredentials | null> {
   if (cachedServerApiConfig && cachedServerApiConfig.url) {
@@ -52,12 +50,6 @@ export async function fetchServerSupabaseConfig(): Promise<SupabaseConfigCredent
             anonKey: data.anonKey,
             source: 'env',
           };
-          try {
-            if (!localStorage.getItem(LOCAL_STORAGE_SUPABASE_URL)) {
-              localStorage.setItem(LOCAL_STORAGE_SUPABASE_URL, data.url);
-              localStorage.setItem(LOCAL_STORAGE_SUPABASE_KEY, data.anonKey);
-            }
-          } catch {}
           return cachedServerApiConfig;
         }
         return null;
@@ -71,17 +63,10 @@ export async function fetchServerSupabaseConfig(): Promise<SupabaseConfigCredent
 }
 
 /**
- * Get active Supabase configuration (prefers custom local config, then cached server config, then env vars)
+ * Get active Supabase configuration: the in-memory server-provided config if
+ * already fetched this session, otherwise the build-time VITE_ env vars.
  */
 export function getSupabaseCredentials(): SupabaseConfigCredentials {
-  if (typeof window !== 'undefined') {
-    const customUrl = localStorage.getItem(LOCAL_STORAGE_SUPABASE_URL)?.trim() || '';
-    const customKey = localStorage.getItem(LOCAL_STORAGE_SUPABASE_KEY)?.trim() || '';
-    if (customUrl && customKey && customUrl.startsWith('http')) {
-      return { url: customUrl, anonKey: customKey, source: 'custom' };
-    }
-  }
-
   if (cachedServerApiConfig && cachedServerApiConfig.url && cachedServerApiConfig.anonKey) {
     return cachedServerApiConfig;
   }
@@ -140,28 +125,6 @@ export function getSupabase(): SupabaseClient | null {
     console.error('❌ [Supabase] Failed to initialize Supabase client:', err);
     return null;
   }
-}
-
-/**
- * Save manual credentials in browser localStorage
- */
-export function setCustomSupabaseCredentials(url: string, anonKey: string): void {
-  if (typeof window === 'undefined') return;
-  const cleanUrl = url.trim();
-  const cleanKey = anonKey.trim();
-
-  if (!cleanUrl && !cleanKey) {
-    localStorage.removeItem(LOCAL_STORAGE_SUPABASE_URL);
-    localStorage.removeItem(LOCAL_STORAGE_SUPABASE_KEY);
-  } else {
-    localStorage.setItem(LOCAL_STORAGE_SUPABASE_URL, cleanUrl);
-    localStorage.setItem(LOCAL_STORAGE_SUPABASE_KEY, cleanKey);
-  }
-
-  // Reset client so it re-initializes on next call
-  clientInstance = null;
-  currentClientUrl = '';
-  currentClientKey = '';
 }
 
 export interface SupabaseRow {
@@ -393,9 +356,10 @@ export async function deleteDisplayFromSupabase(code: string): Promise<boolean> 
 }
 
 /**
- * Realtime Subscription for Postgres Changes on `displays` table (INSERT/UPDATE re-fetch
- * the single display with its slides/announcements/running_texts joins; DELETE stays
- * zero-HTTP since it only needs the code/id already in the payload)
+ * Realtime Subscription for Postgres Changes on `displays` table. There's no local
+ * cache to merge a single-row payload into anymore, so every event (INSERT, UPDATE,
+ * or DELETE) just re-fetches the full list fresh — simpler and always correct: a
+ * DELETE's effect is already reflected by the row being absent from that fetch.
  */
 export function subscribeToSupabaseDisplays(
   onUpdate: (displays: DisplayConfig[]) => void,
@@ -416,62 +380,13 @@ export function subscribeToSupabaseDisplays(
           { event: '*', schema: 'public', table: 'displays' },
           async (payload) => {
             console.log('⚡ [Supabase Realtime] Event detected:', payload.eventType);
-
             try {
-              const newRow = payload.new as SupabaseRow | undefined;
-              const oldRow = payload.old as SupabaseRow | undefined;
-
-              // 1. Zero-HTTP Delete handler: the row itself carries everything needed
-              //    (code/id), no join required, so this can stay a local-only filter.
-              if (payload.eventType === 'DELETE' && oldRow) {
-                const targetCode = (oldRow.code || '').trim().toUpperCase();
-                const localDisplays = (await loadDisplaysFromDb()) || [];
-                const filtered = localDisplays.filter(
-                  (d) => d.code.toUpperCase() !== targetCode && d.id !== oldRow.id
-                );
-                console.log(`⚡ [Supabase Realtime] Applied zero-HTTP deletion for ${targetCode || oldRow.id}`);
-                onUpdate(filtered);
-                return;
-              }
-
-              // 2. INSERT/UPDATE: the payload's `new` never carries joined slides/
-              //    announcements/running_texts (Postgres replication only sends the
-              //    row's own columns), and those fields also touch this same
-              //    "displays" row via the touch_display_updated_at trigger without
-              //    changing `data` at all. So a single fresh fetch with joins is
-              //    required here — it can't be reconstructed from the payload alone.
-              const targetCode = (newRow?.code || '').trim().toUpperCase();
-              if (targetCode) {
-                const single = await fetchSingleDisplayFromSupabase(targetCode);
-                if (single) {
-                  const localDisplays = (await loadDisplaysFromDb()) || [];
-                  const idx = localDisplays.findIndex(
-                    (d) => d.code.toUpperCase() === single.code.toUpperCase()
-                  );
-                  let merged: DisplayConfig[];
-                  if (idx >= 0) {
-                    merged = [...localDisplays];
-                    merged[idx] = single;
-                  } else {
-                    merged = [...localDisplays, single];
-                  }
-                  console.log(`⚡ [Supabase Realtime] Applied single-item fetch for ${targetCode}`);
-                  onUpdate(merged);
-                  return;
-                }
-              }
-
-              // 3. Absolute fallback: Fetch full list if all else fails
               const fresh = await fetchDisplaysFromSupabase();
               if (fresh && fresh.length > 0) {
                 onUpdate(fresh);
               }
             } catch (err) {
-              console.warn('⚠️ [Supabase Realtime] Event handler fallback:', err);
-              const fresh = await fetchDisplaysFromSupabase();
-              if (fresh && fresh.length > 0) {
-                onUpdate(fresh);
-              }
+              console.warn('⚠️ [Supabase Realtime] Event handler notice:', err);
             }
           }
         )

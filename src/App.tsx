@@ -5,7 +5,6 @@ import {
 } from './types';
 import { DEFAULT_DISPLAYS } from './data/defaultConfig';
 import { apiService, subscribeToConfigUpdates, broadcastConfigUpdate } from './services/api';
-import { saveDisplaysToDb } from './services/storageDb';
 import {
   initSyncManager,
   registerSyncHandlers,
@@ -137,16 +136,21 @@ export default function App() {
 
     loadData();
 
-    // Subscribe to cross-tab & real-time Supabase updates
-    const unsubscribe = subscribeToConfigUpdates((fresh) => {
-      if (fresh && fresh.length > 0) {
-        // If user is currently actively typing in admin, don't overwrite user's in-progress typing
-        if (!isUserDirtyRef.current) {
-          setDisplays(fresh);
-          displaysRef.current = fresh;
+    // Subscribe to cross-tab & real-time Supabase updates. The differential poll
+    // compares Supabase's updated_at against displaysRef.current (in-memory only,
+    // for the lifetime of this tab) instead of a persisted cache.
+    const unsubscribe = subscribeToConfigUpdates(
+      (fresh) => {
+        if (fresh && fresh.length > 0) {
+          // If user is currently actively typing in admin, don't overwrite user's in-progress typing
+          if (!isUserDirtyRef.current) {
+            setDisplays(fresh);
+            displaysRef.current = fresh;
+          }
         }
-      }
-    });
+      },
+      () => displaysRef.current
+    );
 
     return () => {
       isMounted = false;
@@ -199,8 +203,8 @@ export default function App() {
         : [...prev, updatedWithTimestamp];
 
       displaysRef.current = next;
-      // Save directly to unlimited IndexedDB store and broadcast locally
-      saveDisplaysToDb(next).catch((e) => console.warn('IndexedDB save warning:', e));
+      // Broadcast locally (other tabs on this device); the debounced auto-save
+      // effect below persists to Supabase ~1.5s after the last edit.
       broadcastConfigUpdate(next);
       return next;
     });
@@ -231,11 +235,11 @@ export default function App() {
         setDisplays(saved);
         displaysRef.current = saved;
       }
-      setSaveMessage(`✓ Pengaturan display "${currentConfig.name}" berhasil disimpan permanen ke Supabase & Penyimpanan Lokal!`);
+      setSaveMessage(`✓ Pengaturan display "${currentConfig.name}" berhasil disimpan ke Supabase!`);
       setTimeout(() => setSaveMessage(''), 4000);
     } catch (err) {
       console.error('Save failed:', err);
-      setSaveMessage('✓ Tersimpan di memori browser (mode offline).');
+      setSaveMessage('❌ Gagal menyimpan — periksa koneksi internet dan coba lagi.');
       setTimeout(() => setSaveMessage(''), 4000);
     } finally {
       setIsSaving(false);

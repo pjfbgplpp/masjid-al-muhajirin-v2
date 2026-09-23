@@ -1,13 +1,20 @@
 import { DisplayConfig, PrayerTimeItem } from '../types';
 import { calculatePrayerTimes } from '../utils/prayerCalculator';
 import { getHijriDate } from '../utils/hijriCalendar';
-import {
-  savePrayerSchedulesToDb,
-  getPrayerDayFromDb,
-  getPrayerDaysForMonthFromDb,
-  StoredPrayerDay,
-  countStoredPrayerDays,
-} from './storageDb';
+
+// In-memory only — no IndexedDB. calculatePrayerTimes() is a fast, pure,
+// deterministic astronomical calculation (adhan library), so recomputing it is
+// cheap; this Map just avoids redundant recalculation within a single session.
+export interface StoredPrayerDay {
+  id: string; // `${code}:${dateStr}` e.g. "MASJID-01:2026-09-04"
+  code: string;
+  dateStr: string; // "YYYY-MM-DD"
+  monthKey: string; // "YYYY-MM"
+  gregorianDateStr: string;
+  hijriDateStr: string;
+  times: PrayerTimeItem[];
+  updatedAt: string;
+}
 
 function formatDateToIso(d: Date): string {
   const year = d.getFullYear();
@@ -22,12 +29,13 @@ function getMonthKey(d: Date): string {
   return `${year}-${month}`;
 }
 
-// In-memory quick cache to avoid redundant IndexedDB reads during rapid renders
+// In-memory quick cache to avoid redundant recalculation during rapid renders
 const memoryPrayerDayCache = new Map<string, StoredPrayerDay>();
 
 /**
- * Pre-generate and cache 12 months (365 days) of prayer times into IndexedDB.
- * Retains the exact mathematical astronomical formula (adhan library + Kemenag/etc parameters + adjustments).
+ * Pre-generate and memoize 12 months (365 days) of prayer times in memory for the
+ * current session. Retains the exact mathematical astronomical formula (adhan
+ * library + Kemenag/etc parameters + adjustments).
  */
 export async function generateAndCache12MonthSchedule(
   config: DisplayConfig,
@@ -37,19 +45,11 @@ export async function generateAndCache12MonthSchedule(
   const today = new Date();
   const todayStr = formatDateToIso(today);
 
-  // Check if today already exists in cache to avoid unnecessary recalculation
-  if (!forceRegenerate) {
-    const existingToday = await getPrayerDayFromDb(code, todayStr);
-    if (existingToday && existingToday.times && existingToday.times.length > 0) {
-      const cachedCount = await countStoredPrayerDays();
-      if (cachedCount >= 180) {
-        // Already cached at least 6 months
-        return cachedCount;
-      }
-    }
+  if (!forceRegenerate && memoryPrayerDayCache.has(`${code}:${todayStr}`)) {
+    // Already generated this session
+    return memoryPrayerDayCache.size;
   }
 
-  console.log(`[PrayerCache] Generating 12-month (365 days) offline prayer schedule for ${code}...`);
   const schedules: StoredPrayerDay[] = [];
   const daysToGenerate = 365;
 
@@ -86,14 +86,12 @@ export async function generateAndCache12MonthSchedule(
     memoryPrayerDayCache.set(record.id, record);
   }
 
-  await savePrayerSchedulesToDb(schedules);
-  console.log(`✓ [PrayerCache] Successfully generated & cached ${schedules.length} days of prayer schedules for ${code}`);
   return schedules.length;
 }
 
 /**
- * Get prayer times for any specific date.
- * Offline-first: Checks memory -> IndexedDB -> Astronomical calculation fallback.
+ * Get prayer times for any specific date. Checks the in-memory cache first, then
+ * falls back to the (instant) astronomical calculation directly.
  */
 export async function getPrayerScheduleForDate(
   config: DisplayConfig,
@@ -103,24 +101,11 @@ export async function getPrayerScheduleForDate(
   const dateStr = formatDateToIso(targetDate);
   const cacheKey = `${code}:${dateStr}`;
 
-  // 1. Check memory cache
   const inMemory = memoryPrayerDayCache.get(cacheKey);
   if (inMemory && inMemory.times && inMemory.times.length > 0) {
     return inMemory.times;
   }
 
-  // 2. Check IndexedDB
-  try {
-    const fromDb = await getPrayerDayFromDb(code, dateStr);
-    if (fromDb && fromDb.times && fromDb.times.length > 0) {
-      memoryPrayerDayCache.set(cacheKey, fromDb);
-      return fromDb.times;
-    }
-  } catch (err) {
-    console.warn('[PrayerCache] Read notice:', err);
-  }
-
-  // 3. Astronomical offline calculation (instant mathematical fallback)
   const freshTimes = calculatePrayerTimes(config.location, config.prayerAdjustments, targetDate);
   return freshTimes;
 }
@@ -136,12 +121,14 @@ export async function getMonthlyPrayerSchedule(
   const code = (config.code || 'MASJID-01').trim().toUpperCase();
   const monthKey = `${year}-${String(month).padStart(2, '0')}`;
 
-  const fromDb = await getPrayerDaysForMonthFromDb(code, monthKey);
-  if (fromDb && fromDb.length > 0) {
-    return fromDb.sort((a, b) => a.dateStr.localeCompare(b.dateStr));
+  const fromMemory = Array.from(memoryPrayerDayCache.values()).filter(
+    (r) => r.code === code && r.monthKey === monthKey
+  );
+  if (fromMemory.length > 0) {
+    return fromMemory.sort((a, b) => a.dateStr.localeCompare(b.dateStr));
   }
 
-  // Generate on-the-fly for requested month if not cached
+  // Generate on-the-fly for requested month if not already cached this session
   const daysInMonth = new Date(year, month, 0).getDate();
   const monthDays: StoredPrayerDay[] = [];
 
@@ -157,7 +144,7 @@ export async function getMonthlyPrayerSchedule(
     const hijri = getHijriDate(d, config.layout?.hijriAdjustmentDays || 0);
     const times = calculatePrayerTimes(config.location, config.prayerAdjustments, d);
 
-    monthDays.push({
+    const record: StoredPrayerDay = {
       id: `${code}:${dateStr}`,
       code,
       dateStr,
@@ -166,10 +153,10 @@ export async function getMonthlyPrayerSchedule(
       hijriDateStr: hijri.formattedWithDay,
       times,
       updatedAt: new Date().toISOString(),
-    });
+    };
+    monthDays.push(record);
+    memoryPrayerDayCache.set(record.id, record);
   }
 
-  // Cache in background
-  savePrayerSchedulesToDb(monthDays).catch(() => {});
   return monthDays;
 }

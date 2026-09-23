@@ -1,12 +1,6 @@
 import { DisplayConfig } from '../types';
 import { DEFAULT_DISPLAYS } from '../data/defaultConfig';
-import {
-  saveDisplaysToDb,
-  loadDisplaysFromDb,
-  saveSingleDisplayToDb,
-} from './storageDb';
 import { generateAndCache12MonthSchedule } from './prayerScheduleCache';
-import { cacheDisplayAssets } from './assetCache';
 import { performSmartSync, recordSyncCheckResult } from './syncManager';
 import {
   getSupabase,
@@ -19,10 +13,6 @@ import {
   deleteDisplayFromSupabase,
   subscribeToSupabaseDisplays,
 } from './supabase';
-
-const STORAGE_KEY = 'masjid_tv_displays_cache';
-const BACKUP_KEY = 'masjid_tv_displays_backup_permanent';
-const ACTIVE_DISPLAY_KEY = 'masjid_tv_active_display_code';
 
 export function normalizeDisplayConfig(raw: Partial<DisplayConfig>): DisplayConfig {
   const base = DEFAULT_DISPLAYS[0];
@@ -60,7 +50,8 @@ export function normalizeDisplayConfig(raw: Partial<DisplayConfig>): DisplayConf
   return merged;
 }
 
-// Broadcast channel for real-time multi-tab / multi-screen synchronization
+// Broadcast channel for real-time multi-tab / multi-screen synchronization within
+// the same device/browser (not persisted storage — just a live message bus).
 let syncBroadcastChannel: BroadcastChannel | null = null;
 try {
   if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
@@ -84,7 +75,20 @@ export function broadcastConfigUpdate(displays: DisplayConfig[]): void {
   }
 }
 
-export function subscribeToConfigUpdates(callback: (displays: DisplayConfig[]) => void): () => void {
+/**
+ * Subscribe to live display updates: realtime Supabase push + a lightweight
+ * differential poll as a fallback, plus cross-tab broadcast on this device.
+ *
+ * No IndexedDB/localStorage involved — `getCurrentDisplays` lets the differential
+ * poll compare Supabase's updated_at against whatever the caller's own React state
+ * currently holds (in-memory, for the lifetime of this tab) instead of a persisted
+ * cache, so a changed display still triggers only a minimal fetch rather than a
+ * full re-download every tick.
+ */
+export function subscribeToConfigUpdates(
+  callback: (displays: DisplayConfig[]) => void,
+  getCurrentDisplays: () => DisplayConfig[]
+): () => void {
   if (typeof window === 'undefined') return () => {};
 
   const handleBroadcast = (event: MessageEvent) => {
@@ -93,41 +97,21 @@ export function subscribeToConfigUpdates(callback: (displays: DisplayConfig[]) =
     }
   };
 
-  const handleStorage = (event: StorageEvent) => {
-    if (event.key === STORAGE_KEY && event.newValue) {
-      try {
-        const parsed = JSON.parse(event.newValue);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          callback(parsed.map(normalizeDisplayConfig));
-        }
-      } catch (e) {
-        // Ignore
-      }
-    }
-  };
-
   if (syncBroadcastChannel) {
     syncBroadcastChannel.addEventListener('message', handleBroadcast);
   }
-  window.addEventListener('storage', handleStorage);
 
-  // 1. Real-time Supabase Subscription with status tracking
-  let isRealtimeActive = false;
+  // 1. Real-time Supabase Subscription
   let unsubscribeSupabase = () => {};
   try {
     unsubscribeSupabase = subscribeToSupabaseDisplays(
       (fresh) => {
         if (fresh && fresh.length > 0) {
-          saveDisplaysToDb(fresh).catch(() => {});
-          safeSetLocalStorage(STORAGE_KEY, fresh);
-          safeSetLocalStorage(BACKUP_KEY, fresh);
           callback(fresh);
           recordSyncCheckResult(fresh.length).catch(() => {});
         }
       },
-      (status) => {
-        isRealtimeActive = status === 'SUBSCRIBED';
-      }
+      () => {}
     );
   } catch (err) {
     console.warn('⚠️ [Supabase] Realtime listener error:', err);
@@ -160,34 +144,34 @@ export function subscribeToConfigUpdates(callback: (displays: DisplayConfig[]) =
               return;
             }
 
-            // Check against local stored timestamps
-            const localDisplays = (await loadDisplaysFromDb()) || [];
-            const localMap = new Map<string, string>();
-            for (const d of localDisplays) {
-              localMap.set(d.code.toUpperCase(), d.updatedAt || '');
+            // Compare against the caller's current in-memory state
+            const knownDisplays = getCurrentDisplays() || [];
+            const knownMap = new Map<string, string>();
+            for (const d of knownDisplays) {
+              knownMap.set(d.code.toUpperCase(), d.updatedAt || '');
             }
 
             const changedCodes: string[] = [];
             for (const r of metaRows) {
               const rCode = (r.code || '').toUpperCase();
-              const localUpdated = localMap.get(rCode);
+              const knownUpdated = knownMap.get(rCode);
               if (
-                !localUpdated ||
-                new Date(r.updated_at).getTime() > new Date(localUpdated).getTime() + 1000
+                !knownUpdated ||
+                new Date(r.updated_at).getTime() > new Date(knownUpdated).getTime() + 1000
               ) {
                 changedCodes.push(r.code);
               }
             }
 
             const remoteCodeSet = new Set(metaRows.map((r) => (r.code || '').toUpperCase()));
-            const hasDeletedCodes = localDisplays.some(
+            const hasDeletedCodes = knownDisplays.some(
               (d) => !remoteCodeSet.has(d.code.toUpperCase())
             );
 
             if (
               changedCodes.length === 0 &&
               !hasDeletedCodes &&
-              localDisplays.length === metaRows.length
+              knownDisplays.length === metaRows.length
             ) {
               lastKnownMetaString = currentMetaStr;
               recordSyncCheckResult(metaRows.length).catch(() => {});
@@ -200,18 +184,16 @@ export function subscribeToConfigUpdates(callback: (displays: DisplayConfig[]) =
             if (changedCodes.length === 1 && !hasDeletedCodes) {
               const single = await fetchSingleDisplayFromSupabase(changedCodes[0]);
               if (single) {
-                const idx = localDisplays.findIndex(
+                const idx = knownDisplays.findIndex(
                   (d) => d.code.toUpperCase() === single.code.toUpperCase()
                 );
                 let merged: DisplayConfig[];
                 if (idx >= 0) {
-                  merged = [...localDisplays];
+                  merged = [...knownDisplays];
                   merged[idx] = single;
                 } else {
-                  merged = [...localDisplays, single];
+                  merged = [...knownDisplays, single];
                 }
-                saveDisplaysToDb(merged).catch(() => {});
-                safeSetLocalStorage(STORAGE_KEY, merged);
                 callback(merged);
                 recordSyncCheckResult(merged.length).catch(() => {});
                 return;
@@ -221,8 +203,6 @@ export function subscribeToConfigUpdates(callback: (displays: DisplayConfig[]) =
             // Otherwise, fetch fresh displays list
             const cloudData = await fetchDisplaysFromSupabase();
             if (cloudData && cloudData.length > 0) {
-              saveDisplaysToDb(cloudData).catch(() => {});
-              safeSetLocalStorage(STORAGE_KEY, cloudData);
               callback(cloudData);
               recordSyncCheckResult(cloudData.length).catch(() => {});
               return;
@@ -243,8 +223,6 @@ export function subscribeToConfigUpdates(callback: (displays: DisplayConfig[]) =
             );
             if (serialized !== lastKnownMetaString) {
               lastKnownMetaString = serialized;
-              saveDisplaysToDb(normalized).catch(() => {});
-              safeSetLocalStorage(STORAGE_KEY, normalized);
               callback(normalized);
             }
             recordSyncCheckResult(normalized.length).catch(() => {});
@@ -278,94 +256,50 @@ export function subscribeToConfigUpdates(callback: (displays: DisplayConfig[]) =
     if (syncBroadcastChannel) {
       syncBroadcastChannel.removeEventListener('message', handleBroadcast);
     }
-    window.removeEventListener('storage', handleStorage);
     try {
       unsubscribeSupabase();
     } catch {}
   };
 }
 
-function getTimestampMs(dateStr?: string): number {
-  if (!dateStr) return 0;
-  const t = new Date(dateStr).getTime();
-  return Number.isFinite(t) ? t : 0;
-}
-
-function safeSetLocalStorage(key: string, data: DisplayConfig[]): void {
-  try {
-    localStorage.setItem(key, JSON.stringify(data));
-  } catch (err) {
-    try {
-      const stripped = data.map((d) => ({
-        ...d,
-        slides: d.slides.map((s) => ({
-          ...s,
-          imageUrl: s.imageUrl?.startsWith('data:') ? '' : s.imageUrl,
-        })),
-      }));
-      localStorage.setItem(key, JSON.stringify(stripped));
-    } catch {
-      // Ignore if localStorage is exhausted; IndexedDB handles complete data safely
-    }
-  }
-}
-
-export async function fetchAllDisplays(): Promise<DisplayConfig[]> {
-  // 1. OFFLINE-FIRST: Read immediately from IndexedDB / LocalStorage first (0ms instantaneous display boot)
-  let localList: DisplayConfig[] | null = null;
-  try {
-    const fromDb = await loadDisplaysFromDb();
-    if (fromDb && fromDb.length > 0) {
-      localList = fromDb.map(normalizeDisplayConfig);
-    }
-  } catch (e) {
-    console.warn('[IndexedDB] read warning:', e);
-  }
-
-  if (!localList || localList.length === 0) {
-    try {
-      const cached = localStorage.getItem(STORAGE_KEY) || localStorage.getItem(BACKUP_KEY);
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          localList = parsed.map(normalizeDisplayConfig);
-        }
+/**
+ * Race a promise against a timeout, resolving to `null` if the timeout wins. Used
+ * to bound the initial Supabase call below — the Supabase client has no built-in
+ * request timeout, and a broken/unreachable network can otherwise leave the
+ * browser's own DNS/connection retry behavior in control of how long the TV sits
+ * on the loading screen before the server fallback ever gets a chance to run.
+ */
+function withTimeout<T>(promise: PromiseLike<T>, ms: number): Promise<T | null> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(null), ms);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      () => {
+        clearTimeout(timer);
+        resolve(null);
       }
-    } catch (e) {
-      console.warn('Local storage read error:', e);
-    }
-  }
+    );
+  });
+}
 
-  // If local data exists, return it immediately so the TV display turns on with 0 blank frames!
-  if (localList && localList.length > 0) {
-    // Trigger background cache and differential sync if network is available
-    for (const d of localList) {
-      generateAndCache12MonthSchedule(d, false).catch(() => {});
-      cacheDisplayAssets(d).catch(() => {});
-    }
-
-    if (typeof navigator !== 'undefined' && navigator.onLine) {
-      setTimeout(() => {
-        performSmartSync(localList!).catch(() => {});
-      }, 300);
-    }
-    return localList;
-  }
-
-  // 2. Fresh installation fallback: If NO local data exists at all, try Supabase
+/**
+ * Fetch all displays fresh from the source of truth: Supabase first, then the
+ * app's own server (which has its own single shared fallback file, not a
+ * per-browser cache), then the bundled generic template as a last resort.
+ */
+export async function fetchAllDisplays(): Promise<DisplayConfig[]> {
   if (typeof navigator !== 'undefined' && navigator.onLine) {
     await ensureSupabaseClient();
     if (isSupabaseConfigured()) {
       try {
-        const supabaseData = await fetchDisplaysFromSupabase();
+        const supabaseData = await withTimeout(fetchDisplaysFromSupabase(), 6000);
         if (supabaseData && supabaseData.length > 0) {
           console.log(`✓ [API] Loaded ${supabaseData.length} displays directly from Supabase Cloud`);
-          await saveDisplaysToDb(supabaseData);
-          safeSetLocalStorage(STORAGE_KEY, supabaseData);
-          safeSetLocalStorage(BACKUP_KEY, supabaseData);
           for (const d of supabaseData) {
             generateAndCache12MonthSchedule(d, false).catch(() => {});
-            cacheDisplayAssets(d).catch(() => {});
           }
           return supabaseData;
         }
@@ -374,7 +308,7 @@ export async function fetchAllDisplays(): Promise<DisplayConfig[]> {
       }
     }
 
-    // 3. Fallback to Server API
+    // Fallback to the server's own API (server-side shared cache, not per-device)
     try {
       const res = await fetch('/api/displays', { signal: AbortSignal.timeout(5000) });
       if (res.ok) {
@@ -382,12 +316,8 @@ export async function fetchAllDisplays(): Promise<DisplayConfig[]> {
         if (Array.isArray(serverData) && serverData.length > 0) {
           const normalizedServer = serverData.map(normalizeDisplayConfig);
           console.log(`✓ [API] Loaded ${normalizedServer.length} displays from Server API`);
-          await saveDisplaysToDb(normalizedServer);
-          safeSetLocalStorage(STORAGE_KEY, normalizedServer);
-          safeSetLocalStorage(BACKUP_KEY, normalizedServer);
           for (const d of normalizedServer) {
             generateAndCache12MonthSchedule(d, false).catch(() => {});
-            cacheDisplayAssets(d).catch(() => {});
           }
           return normalizedServer;
         }
@@ -397,13 +327,11 @@ export async function fetchAllDisplays(): Promise<DisplayConfig[]> {
     }
   }
 
-  // 4. Ultimate fallback to bundled defaults
-  await saveDisplaysToDb(DEFAULT_DISPLAYS);
-  safeSetLocalStorage(STORAGE_KEY, DEFAULT_DISPLAYS);
-  safeSetLocalStorage(BACKUP_KEY, DEFAULT_DISPLAYS);
+  // Ultimate fallback: bundled generic template (only reached if both Supabase
+  // and the server are unreachable, or the browser is offline with nothing else
+  // to ask).
   for (const d of DEFAULT_DISPLAYS) {
     generateAndCache12MonthSchedule(d, false).catch(() => {});
-    cacheDisplayAssets(d).catch(() => {});
   }
   return DEFAULT_DISPLAYS;
 }
@@ -411,51 +339,17 @@ export async function fetchAllDisplays(): Promise<DisplayConfig[]> {
 export async function fetchDisplayByCode(code: string): Promise<DisplayConfig> {
   const cleanCode = (code || 'MASJID-01').trim();
 
-  // 1. OFFLINE-FIRST: Search in IndexedDB first!
-  try {
-    const fromDb = await loadDisplaysFromDb();
-    if (fromDb && fromDb.length > 0) {
-      const found = fromDb.find(
-        (d) => d.code.toLowerCase() === cleanCode.toLowerCase() || d.id === cleanCode
-      );
-      if (found) {
-        const normalized = normalizeDisplayConfig(found);
-        generateAndCache12MonthSchedule(normalized, false).catch(() => {});
-        cacheDisplayAssets(normalized).catch(() => {});
-        return normalized;
-      }
-    }
-  } catch {}
-
-  // 2. Fallback: Search in local storage
-  try {
-    const cached = localStorage.getItem(STORAGE_KEY);
-    if (cached) {
-      const parsed: DisplayConfig[] = JSON.parse(cached);
-      const found = parsed.find(
-        (d) => d.code.toLowerCase() === cleanCode.toLowerCase() || d.id === cleanCode
-      );
-      if (found) {
-        const normalized = normalizeDisplayConfig(found);
-        generateAndCache12MonthSchedule(normalized, false).catch(() => {});
-        cacheDisplayAssets(normalized).catch(() => {});
-        return normalized;
-      }
-    }
-  } catch {}
-
-  // 3. If online and not found locally, fetch from Supabase
   if (typeof navigator !== 'undefined' && navigator.onLine) {
     await ensureSupabaseClient();
     if (isSupabaseConfigured()) {
       try {
         const supabase = getSupabase();
         if (supabase) {
-          const { data, error } = await supabase
-            .from('displays')
-            .select('*')
-            .ilike('code', cleanCode)
-            .maybeSingle();
+          const result = await withTimeout(
+            supabase.from('displays').select('*').ilike('code', cleanCode).maybeSingle(),
+            6000
+          );
+          const { data, error } = result || { data: null, error: null };
 
           if (!error && data) {
             const item = normalizeDisplayConfig({
@@ -465,9 +359,7 @@ export async function fetchDisplayByCode(code: string): Promise<DisplayConfig> {
               name: data.name || data.data?.name,
               updatedAt: data.updated_at || data.data?.updatedAt || new Date().toISOString(),
             });
-            await saveSingleDisplayToDb(item);
             generateAndCache12MonthSchedule(item, false).catch(() => {});
-            cacheDisplayAssets(item).catch(() => {});
             return item;
           }
         }
@@ -476,7 +368,6 @@ export async function fetchDisplayByCode(code: string): Promise<DisplayConfig> {
       }
     }
 
-    // 4. Fetch from Backend Server
     try {
       const res = await fetch(`/api/displays/${encodeURIComponent(cleanCode)}`, {
         signal: AbortSignal.timeout(4000),
@@ -484,9 +375,7 @@ export async function fetchDisplayByCode(code: string): Promise<DisplayConfig> {
       if (res.ok) {
         const data = await res.json();
         const normalized = normalizeDisplayConfig(data);
-        await saveSingleDisplayToDb(normalized);
         generateAndCache12MonthSchedule(normalized, false).catch(() => {});
-        cacheDisplayAssets(normalized).catch(() => {});
         return normalized;
       }
     } catch {}
@@ -504,21 +393,14 @@ export async function saveAllDisplays(displays: DisplayConfig[]): Promise<Displa
     updatedAt: new Date().toISOString(),
   }));
 
-  // 1. Immediately update IndexedDB (unlimited quota) AND LocalStorage cache
-  await saveDisplaysToDb(updatedList);
-  safeSetLocalStorage(STORAGE_KEY, updatedList);
-  safeSetLocalStorage(BACKUP_KEY, updatedList);
-
-  // Pre-generate 12-month schedules and pre-cache assets for all updated displays
   for (const d of updatedList) {
     generateAndCache12MonthSchedule(d, true).catch(() => {});
-    cacheDisplayAssets(d).catch(() => {});
   }
 
-  // 2. Broadcast to all open tabs / TV screens immediately
+  // Broadcast to other tabs/screens on this device immediately
   broadcastConfigUpdate(updatedList);
 
-  // 3. Persist directly to Supabase Cloud Database if online
+  // Persist to Supabase + server if online
   if (typeof navigator !== 'undefined' && navigator.onLine) {
     await ensureSupabaseClient();
     try {
@@ -530,7 +412,6 @@ export async function saveAllDisplays(displays: DisplayConfig[]): Promise<Displa
       console.warn('⚠️ [Supabase] Auto-save to Supabase notice:', err);
     }
 
-    // 4. Persist to server bulk endpoint
     try {
       await fetch('/api/displays/bulk', {
         method: 'POST',
@@ -548,34 +429,10 @@ export async function saveDisplayConfig(config: DisplayConfig): Promise<DisplayC
     ...config,
     updatedAt: new Date().toISOString(),
   };
-  const cleanCode = (updated.code || 'MASJID-01').trim().toUpperCase();
 
-  // 1. Update IndexedDB & local storage cache immediately
-  await saveSingleDisplayToDb(updated);
-
-  // Pre-generate 12-month schedules and pre-cache assets in background
   generateAndCache12MonthSchedule(updated, true).catch(() => {});
-  cacheDisplayAssets(updated).catch(() => {});
+  broadcastConfigUpdate([updated]);
 
-  try {
-    const cached = localStorage.getItem(STORAGE_KEY);
-    let list: DisplayConfig[] = cached ? JSON.parse(cached) : [...DEFAULT_DISPLAYS];
-    const idx = list.findIndex(
-      (d) => (d.id && updated.id && d.id === updated.id) || d.code.toLowerCase() === updated.code.toLowerCase()
-    );
-    if (idx >= 0) {
-      list[idx] = updated;
-    } else {
-      list.push(updated);
-    }
-    safeSetLocalStorage(STORAGE_KEY, list);
-    safeSetLocalStorage(BACKUP_KEY, list);
-    broadcastConfigUpdate(list);
-  } catch (err) {
-    console.warn('Local storage update warning:', err);
-  }
-
-  // 2. Save directly to Supabase Cloud Database if online
   if (typeof navigator !== 'undefined' && navigator.onLine) {
     await ensureSupabaseClient();
     try {
@@ -584,7 +441,6 @@ export async function saveDisplayConfig(config: DisplayConfig): Promise<DisplayC
       console.warn('⚠️ [Supabase] Save single display notice:', err);
     }
 
-    // 3. Persist to backend API
     try {
       await fetch(`/api/displays/${encodeURIComponent(config.code)}`, {
         method: 'PUT',
@@ -601,7 +457,7 @@ export async function createNewDisplay(newDisplay: Partial<DisplayConfig>): Prom
   const base = DEFAULT_DISPLAYS[0];
   const cleanName = newDisplay.name || 'Layar TV Masjid';
   const cleanCode = (newDisplay.code || `DISPLAY-${Date.now().toString().slice(-4)}`).toUpperCase().trim();
-  
+
   const created: DisplayConfig = {
     ...base,
     ...newDisplay,
@@ -617,10 +473,6 @@ export async function createNewDisplay(newDisplay: Partial<DisplayConfig>): Prom
     updatedAt: new Date().toISOString(),
   };
 
-  // Save to IndexedDB
-  await saveSingleDisplayToDb(created);
-
-  // Save to Supabase Cloud Database
   await ensureSupabaseClient();
   try {
     await saveSingleDisplayToSupabase(created);
@@ -629,7 +481,6 @@ export async function createNewDisplay(newDisplay: Partial<DisplayConfig>): Prom
     console.warn('⚠️ [Supabase] Create display error:', err);
   }
 
-  // Save to server
   try {
     await fetch('/api/displays', {
       method: 'POST',
@@ -646,7 +497,6 @@ export async function createNewDisplay(newDisplay: Partial<DisplayConfig>): Prom
 export async function deleteDisplay(code: string): Promise<boolean> {
   const cleanCode = (code || '').trim().toUpperCase();
 
-  // Delete from Supabase
   await ensureSupabaseClient();
   try {
     await deleteDisplayFromSupabase(cleanCode);
@@ -655,25 +505,10 @@ export async function deleteDisplay(code: string): Promise<boolean> {
     console.warn('⚠️ [Supabase] Delete display error:', err);
   }
 
-  // Delete from server
   try {
     await fetch(`/api/displays/${encodeURIComponent(code)}`, {
       method: 'DELETE',
     });
-  } catch {
-    // Ignore
-  }
-
-  // Delete from IndexedDB and local storage
-  try {
-    const fromDb = await loadDisplaysFromDb();
-    if (fromDb) {
-      const filtered = fromDb.filter((d) => d.code.toUpperCase() !== cleanCode && d.id !== cleanCode);
-      await saveDisplaysToDb(filtered);
-      safeSetLocalStorage(STORAGE_KEY, filtered);
-      safeSetLocalStorage(BACKUP_KEY, filtered);
-      broadcastConfigUpdate(filtered);
-    }
   } catch {
     // Ignore
   }
@@ -686,59 +521,10 @@ export async function resetDemoDisplays(): Promise<DisplayConfig[]> {
     const res = await fetch('/api/displays/reset-demo', { method: 'POST' });
     if (res.ok) {
       const data = await res.json();
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(data.displays || DEFAULT_DISPLAYS));
       return data.displays || DEFAULT_DISPLAYS;
     }
   } catch (err) {
     console.warn('Reset demo API failed:', err);
-  }
-
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(DEFAULT_DISPLAYS));
-  return DEFAULT_DISPLAYS;
-}
-
-export function getStoredActiveDisplayCode(): string {
-  return localStorage.getItem(ACTIVE_DISPLAY_KEY) || 'MASJID-01';
-}
-
-export function setStoredActiveDisplayCode(code: string): void {
-  localStorage.setItem(ACTIVE_DISPLAY_KEY, code);
-}
-
-export function exportDisplaysToJson(displays: DisplayConfig[]): string {
-  return JSON.stringify(displays, null, 2);
-}
-
-export async function importDisplaysFromJson(jsonString: string): Promise<DisplayConfig[]> {
-  const parsed = JSON.parse(jsonString);
-  if (!Array.isArray(parsed) || parsed.length === 0) {
-    throw new Error('Format file JSON backup tidak valid');
-  }
-  const normalized = parsed.map(normalizeDisplayConfig);
-  return await saveAllDisplays(normalized);
-}
-
-export function hasPermanentBackup(): boolean {
-  try {
-    const b = localStorage.getItem(BACKUP_KEY);
-    return !!b && b.length > 50;
-  } catch {
-    return false;
-  }
-}
-
-export async function restorePermanentBackup(): Promise<DisplayConfig[]> {
-  try {
-    const b = localStorage.getItem(BACKUP_KEY);
-    if (b) {
-      const parsed = JSON.parse(b);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        const normalized = parsed.map(normalizeDisplayConfig);
-        return await saveAllDisplays(normalized);
-      }
-    }
-  } catch (e) {
-    console.error('Failed to restore backup:', e);
   }
   return DEFAULT_DISPLAYS;
 }
@@ -765,8 +551,4 @@ export const apiService = {
   },
   deleteDisplay,
   resetDemoDisplays,
-  exportToJson: exportDisplaysToJson,
-  importFromJson: importDisplaysFromJson,
-  hasPermanentBackup,
-  restorePermanentBackup,
 };

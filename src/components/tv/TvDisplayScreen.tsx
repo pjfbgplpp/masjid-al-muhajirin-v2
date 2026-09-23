@@ -350,7 +350,7 @@ export const TvDisplayScreen: React.FC<TvDisplayScreenProps> = ({
   // Current Slide
   const currentSlide = activeSlides[currentSlideIndex] || activeSlides[0];
 
-  // Cached offline image URLs from IndexedDB & Service Worker (Offline-First)
+  // Image URLs with a graceful placeholder fallback if a load fails
   const cachedLogoUrl = useCachedImage(config.layout.logoUrl, 'Logo');
   const cachedBgUrl = useCachedImage(config.theme.backgroundImageUrl, 'Latar Belakang');
   const cachedSlideUrl = useCachedImage(currentSlide?.imageUrl, currentSlide?.title || 'Slide');

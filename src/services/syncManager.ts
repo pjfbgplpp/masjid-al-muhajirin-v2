@@ -3,17 +3,8 @@ import {
   ensureSupabaseClient,
   isSupabaseConfigured,
   fetchDisplaysFromSupabase,
-  SupabaseRow,
-  parseSupabaseRow,
 } from './supabase';
-import {
-  saveDisplaysToDb,
-  loadDisplaysFromDb,
-  setDbMetadata,
-  getDbMetadata,
-} from './storageDb';
 import { generateAndCache12MonthSchedule } from './prayerScheduleCache';
-import { cacheDisplayAssets } from './assetCache';
 
 export type ConnectionStatus = 'ONLINE' | 'OFFLINE' | 'SYNCING';
 
@@ -112,14 +103,6 @@ export function updateSyncStatus(status: ConnectionStatus, message?: string) {
 export async function initSyncManager(): Promise<void> {
   if (typeof window === 'undefined') return;
 
-  try {
-    const savedLastSync = await getDbMetadata('last_sync_timestamp');
-    if (savedLastSync && typeof savedLastSync === 'number') {
-      currentState.lastSyncTimestamp = savedLastSync;
-      currentState.lastSyncFormatted = formatSyncDate(savedLastSync);
-    }
-  } catch {}
-
   // The browser already tells us this for free (no network round-trip needed), so
   // the status flips instantly. The actual re-sync on reconnect is api.ts's job.
   const handleOnline = () => {
@@ -153,9 +136,6 @@ export async function recordSyncCheckResult(displayCount: number): Promise<void>
   currentState.cachedDisplayCount = displayCount;
   currentState.message = 'Sinkron • Data lokal sudah yang terbaru';
   notifyListeners();
-  try {
-    await setDbMetadata('last_sync_timestamp', now);
-  } catch {}
 }
 
 // Background sync lock
@@ -202,8 +182,9 @@ export async function triggerBackgroundSync(displays?: DisplayConfig[]): Promise
  * Smart Differential Sync with Supabase:
  * 1. Checks if Supabase has changed by inspecting updated_at (ultra-lightweight query)
  * 2. If no change, updates lastSyncTimestamp with 0 data re-download
- * 3. If changed, fetches only what is necessary, updates local storage, caches schedules & assets
- * 4. On any failure: NEVER deletes or clears local data! Falls back silently to local storage.
+ * 3. If changed, fetches only what is necessary and pre-warms the prayer schedule cache
+ * 4. On any failure: keeps whatever the caller already has in memory (`localDisplays`)
+ *    and falls back to the server's own API/cache — nothing is ever cleared.
  */
 export async function performSmartSync(
   localDisplays: DisplayConfig[],
@@ -302,7 +283,6 @@ export async function performSmartSync(
       currentState.lastSyncFormatted = formatSyncDate(now);
       currentState.cachedDisplayCount = localDisplays.length;
       currentState.message = 'Sinkron • Data lokal sudah yang terbaru';
-      await setDbMetadata('last_sync_timestamp', now);
       notifyListeners();
       return localDisplays;
     }
@@ -336,18 +316,10 @@ async function handleSuccessfulSync(
 ) {
   const now = Date.now();
 
-  // Save to IndexedDB & LocalStorage
-  await saveDisplaysToDb(freshDisplays);
-
-  // Pre-generate 12-month prayer schedule and pre-cache assets in background
+  // Pre-generate 12-month prayer schedule in the in-memory cache
   for (const d of freshDisplays) {
     generateAndCache12MonthSchedule(d, false).catch(() => {});
-    cacheDisplayAssets(d).catch(() => {});
   }
-
-  // Update sync metadata
-  await setDbMetadata('last_sync_timestamp', now);
-  await setDbMetadata('last_sync_displays_count', freshDisplays.length);
 
   currentState.status = 'ONLINE';
   currentState.lastSyncTimestamp = now;
