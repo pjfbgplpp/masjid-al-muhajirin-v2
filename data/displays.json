@@ -40,11 +40,11 @@
       "showHijriDate": true,
       "showSlideshow": true,
       "enableSafeArea": true,
-      "qrCodeFontSize": "lg",
+      "qrCodeFontSize": "sm",
       "qrCodeSubtitle": "Scan untuk transfer langsung rekening kas masjid",
       "showKajianInfo": true,
       "showMosqueName": true,
-      "safeAreaPercent": 3,
+      "safeAreaPercent": 5,
       "showPrayerTimes": true,
       "showRunningText": true,
       "runningTextColor": "#D4AF37",
@@ -60,54 +60,6 @@
       "hijriAdjustmentDays": 0,
       "runningTextFontSize": "xl",
       "showNextPrayerCountdown": true
-    },
-    "isActive": true,
-    "location": {
-      "city": "Bekasi",
-      "madhab": "Shafi",
-      "address": "Komplek PU, Jl. Cipta Karya I, RT.07/RW.07, Sumurbatu, Bantargebang",
-      "tagline": "Pusat Ibadah, Tarbiyah, & Ukhuwah Umat",
-      "district": "Coblong",
-      "latitude": -6.9175,
-      "province": "Jawa Barat",
-      "timezone": "Asia/Jakarta",
-      "longitude": 107.6191,
-      "mosqueName": "Yayasan Masjid Al Muhajirin",
-      "calculationMethod": "KEMENAG"
-    },
-    "createdAt": "2026-09-04T02:18:28.967+00:00",
-    "updatedAt": "2026-09-21T08:37:28.263313+00:00",
-    "description": "Layar LED TV 65\" di shaf depan ruang utama jamaah.",
-    "prayerAdjustments": {
-      "asr": 4,
-      "fajr": 4,
-      "isha": 4,
-      "dhuha": 0,
-      "dhuhr": 4,
-      "imsak": 0,
-      "maghrib": 4,
-      "sunrise": 0
-    },
-    "prayerModeSettings": {
-      "enableAudioBeep": true,
-      "enableAdzanAlert": true,
-      "prePrayerMinutes": 7,
-      "customAdzanMessage": "WAKTU ADZAN TELAH BERKUMANDANG - MARI MENUNAIKAN SHALAT",
-      "customIqamahMessage": "LURUSKAN DAN RAPATKAN SHAF • NONAKTIFKAN NADA DERING HP",
-      "customSholatMessage": "SHALAT BERJAMA'AH SEDANG BERLANGSUNG • HARAP TENANG DAN KHUSYUK",
-      "adzanDurationMinutes": 3,
-      "enablePrePrayerAlert": true,
-      "enableIqamahCountdown": true,
-      "sholatDurationMinutes": 15,
-      "enableSholatSilentMode": true,
-      "iqamahCountdownMinutes": {
-        "asr": 7,
-        "fajr": 7,
-        "isha": 7,
-        "dhuhr": 7,
-        "jumuah": 30,
-        "maghrib": 7
-      }
     },
     "slides": [
       {
@@ -216,6 +168,37 @@
         "arabicFontSize": "auto"
       }
     ],
+    "isActive": true,
+    "location": {
+      "city": "Bekasi",
+      "madhab": "Shafi",
+      "address": "Komplek PU, Jl. Cipta Karya I, RT.07/RW.07, Sumurbatu, Bantargebang",
+      "tagline": "Pusat Ibadah, Tarbiyah, & Ukhuwah Umat",
+      "district": "Coblong",
+      "latitude": -6.9175,
+      "province": "Jawa Barat",
+      "timezone": "Asia/Jakarta",
+      "longitude": 107.6191,
+      "mosqueName": "Yayasan Masjid Al Muhajirin",
+      "calculationMethod": "KEMENAG"
+    },
+    "createdAt": "2026-09-04T02:18:28.967+00:00",
+    "updatedAt": "2026-09-22T12:41:10.547+00:00",
+    "description": "Layar LED TV 65\" di shaf depan ruang utama jamaah.",
+    "runningTexts": [
+      {
+        "id": "rt-1",
+        "text": "SELAMAT DATANG DI MASJID AL MUHAJIRIN • MOHON NONAKTIFKAN ATAU ALIKHKAN HP KE MODE HENING (SILENT) SAAT SHALATTT",
+        "isActive": true,
+        "order": 1
+      },
+      {
+        "id": "rt-2",
+        "text": "LURUSKAN DAN RAPATKAN SHAF KARENA KELURUSAN SHAF MERUPAKAN BAGIAN DARI KESEMPURNAAN SHALAT (HR. BUKHARI & MUSLIM)",
+        "isActive": true,
+        "order": 2
+      }
+    ],
     "announcements": [
       {
         "id": "ann-1",
@@ -238,19 +221,36 @@
         "isActive": true
       }
     ],
-    "runningTexts": [
-      {
-        "id": "rt-1",
-        "text": "SELAMAT DATANG DI MASJID AL MUHAJIRIN • MOHON NONAKTIFKAN ATAU ALIKHKAN HP KE MODE HENING (SILENT) SAAT SHALAT",
-        "isActive": true,
-        "order": 1
-      },
-      {
-        "id": "rt-2",
-        "text": "LURUSKAN DAN RAPATKAN SHAF KARENA KELURUSAN SHAF MERUPAKAN BAGIAN DARI KESEMPURNAAN SHALAT (HR. BUKHARI & MUSLIM)",
-        "isActive": true,
-        "order": 2
+    "prayerAdjustments": {
+      "asr": 4,
+      "fajr": 4,
+      "isha": 4,
+      "dhuha": 0,
+      "dhuhr": 4,
+      "imsak": 0,
+      "maghrib": 4,
+      "sunrise": 0
+    },
+    "prayerModeSettings": {
+      "enableAudioBeep": true,
+      "enableAdzanAlert": true,
+      "prePrayerMinutes": 7,
+      "customAdzanMessage": "WAKTU ADZAN TELAH BERKUMANDANG - MARI MENUNAIKAN SHALAT",
+      "customIqamahMessage": "LURUSKAN DAN RAPATKAN SHAF • NONAKTIFKAN NADA DERING HP",
+      "customSholatMessage": "SHALAT BERJAMA'AH SEDANG BERLANGSUNG • HARAP TENANG DAN KHUSYUK",
+      "adzanDurationMinutes": 3,
+      "enablePrePrayerAlert": true,
+      "enableIqamahCountdown": true,
+      "sholatDurationMinutes": 15,
+      "enableSholatSilentMode": true,
+      "iqamahCountdownMinutes": {
+        "asr": 7,
+        "fajr": 7,
+        "isha": 7,
+        "dhuhr": 7,
+        "jumuah": 30,
+        "maghrib": 7
       }
-    ]
+    }
   }
 ]
