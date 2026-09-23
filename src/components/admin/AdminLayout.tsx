@@ -21,7 +21,6 @@ import {
   Download,
   Eye,
   Sliders,
-  Database,
 } from 'lucide-react';
 import { DisplayConfig, PrayerState } from '../../types';
 import { OverviewTab } from './tabs/OverviewTab';
@@ -37,7 +36,6 @@ import { QrCodeTab } from './tabs/QrCodeTab';
 import { AiAssistantTab } from './tabs/AiAssistantTab';
 import { TvGuideTab } from './tabs/TvGuideTab';
 import { TvPreviewTab } from './tabs/TvPreviewTab';
-import { SupabaseTab } from './tabs/SupabaseTab';
 import { isSupabaseConfigured } from '../../services/supabase';
 import { SyncState } from '../../services/syncManager';
 
@@ -49,7 +47,6 @@ interface AdminLayoutProps {
   isSaving: boolean;
   saveMessage: string;
   syncState?: SyncState;
-  onTriggerSync?: () => void;
   onTabChange: (tabId: string) => void;
   onSelectDisplay: (code: string) => void;
   onConfigChange: (updated: DisplayConfig) => void;
@@ -58,7 +55,6 @@ interface AdminLayoutProps {
   onDeleteDisplay: (code: string) => void;
   onExportPackage: () => void;
   onOpenTvDisplay: (code?: string) => void;
-  onDisplaysUpdated?: (displays: DisplayConfig[]) => void;
 }
 
 export const AdminLayout: React.FC<AdminLayoutProps> = ({
@@ -69,7 +65,6 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
   isSaving,
   saveMessage,
   syncState,
-  onTriggerSync,
   onTabChange,
   onSelectDisplay,
   onConfigChange,
@@ -78,14 +73,12 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
   onDeleteDisplay,
   onExportPackage,
   onOpenTvDisplay,
-  onDisplaysUpdated,
 }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const navMenuItems = [
     // 1. SISTEM & PENGATURAN INTI (DI ATAS)
     { id: 'overview', label: 'Dashboard Utama', icon: LayoutDashboard, category: 'sistem' },
-    { id: 'supabase', label: 'Database Supabase', icon: Database, category: 'sistem' },
     { id: 'location', label: 'Lokasi & GPS Masjid', icon: MapPin, category: 'sistem' },
     { id: 'prayer', label: 'Jadwal Sholat & Iqamah', icon: Clock, category: 'sistem' },
     { id: 'displays', label: 'Multi-Display TV', icon: Tv, badge: displays.length, category: 'sistem' },
@@ -135,20 +128,18 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
 
         {/* Display Selector Dropdown & Quick Actions */}
         <div className="flex items-center gap-2 sm:gap-2.5">
-          {/* Cloud Database & Smart Sync Status Badge */}
-          <button
-            type="button"
-            onClick={() => onTabChange('supabase')}
-            className={`hidden xl:flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[11px] font-semibold shadow-sm transition-colors cursor-pointer ${
+          {/* Cloud Database & Smart Sync Status Badge (display-only, no navigation) */}
+          <div
+            className={`hidden xl:flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[11px] font-semibold shadow-sm ${
               syncState?.status === 'OFFLINE'
-                ? 'bg-amber-500/10 hover:bg-amber-500/20 border-amber-500/30 text-amber-400'
+                ? 'bg-amber-500/10 border-amber-500/30 text-amber-400'
                 : syncState?.status === 'SYNCING'
-                ? 'bg-cyan-500/10 hover:bg-cyan-500/20 border-cyan-500/30 text-cyan-400'
-                : 'bg-emerald-500/10 hover:bg-emerald-500/20 border-emerald-500/30 text-emerald-400'
+                ? 'bg-cyan-500/10 border-cyan-500/30 text-cyan-400'
+                : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
             }`}
             title={`Status: ${syncState?.status || 'ONLINE'} | Terakhir sinkron: ${
               syncState?.lastSyncTime ? new Date(syncState.lastSyncTime).toLocaleTimeString('id-ID') : 'Baru saja'
-            }. Klik untuk detail & pengaturan Supabase`}
+            }`}
           >
             <span className="relative flex h-2 w-2">
               <span
@@ -179,7 +170,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
                 ? '⚡ Supabase Cloud Tersinkron'
                 : 'Cloud Database Aktif'}
             </span>
-          </button>
+          </div>
 
           <div className="relative hidden md:block">
             <select
@@ -567,15 +558,6 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
                 onNavigateTab={(tab) => onTabChange(tab)}
                 onOpenTvDisplay={() => onOpenTvDisplay(currentConfig.code)}
                 onExportPackage={onExportPackage}
-              />
-            )}
-
-            {activeTab === 'supabase' && (
-              <SupabaseTab
-                displays={displays}
-                onDisplaysUpdated={onDisplaysUpdated || (() => {})}
-                syncState={syncState}
-                onTriggerSync={onTriggerSync}
               />
             )}
 

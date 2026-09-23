@@ -9,7 +9,6 @@ import { saveDisplaysToDb } from './services/storageDb';
 import {
   initSyncManager,
   registerSyncHandlers,
-  triggerBackgroundSync,
   subscribeToSyncStatus,
   SyncState,
 } from './services/syncManager';
@@ -363,7 +362,6 @@ export default function App() {
       isSaving={isSaving}
       saveMessage={saveMessage}
       syncState={syncState}
-      onTriggerSync={() => triggerBackgroundSync(displaysRef.current)}
       onTabChange={setActiveAdminTab}
       onSelectDisplay={handleSelectDisplay}
       onConfigChange={handleConfigChange}
@@ -372,10 +370,6 @@ export default function App() {
       onDeleteDisplay={handleDeleteDisplay}
       onExportPackage={handleExportZip}
       onOpenTvDisplay={handleOpenTvDisplay}
-      onDisplaysUpdated={(fresh) => {
-        setDisplays(fresh);
-        displaysRef.current = fresh;
-      }}
     />
   );
 }

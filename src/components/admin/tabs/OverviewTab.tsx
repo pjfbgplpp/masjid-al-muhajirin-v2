@@ -14,7 +14,6 @@ import {
   QrCode,
   HelpCircle,
   ChevronRight,
-  Database,
   Calendar,
   Sliders,
   Sun,
@@ -489,23 +488,6 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
                   </div>
                 </div>
                 <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-teal-300 transition-transform group-hover:translate-x-0.5" />
-              </button>
-
-              <button
-                type="button"
-                onClick={() => onNavigateTab('supabase')}
-                className="w-full text-left p-3.5 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-800 hover:border-emerald-500/60 transition-all flex items-center justify-between group shadow-sm"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center flex-shrink-0">
-                    <Database className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-bold text-white group-hover:text-emerald-300">Database Supabase Cloud</h4>
-                    <p className="text-xs text-slate-200 font-medium group-hover:text-white">Integrasi cloud database & sinkronisasi TV live</p>
-                  </div>
-                </div>
-                <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-emerald-300 transition-transform group-hover:translate-x-0.5" />
               </button>
             </div>
           </div>
