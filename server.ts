@@ -547,7 +547,7 @@ async function startServer() {
   });
 }
 
-// On Vercel this module is imported by api/[...path].ts as a serverless function,
+// On Vercel this module is imported by api/index.ts as a serverless function,
 // not run as a long-lived process — the runtime invokes the exported Express app
 // per-request, so listening on a port here would be meaningless (and static files
 // are already served by Vercel's own build output, not by Express).
