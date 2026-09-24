@@ -1,4 +1,4 @@
-import app from '../server';
+import app from '../server.js';
 
 // Catch-all so every /api/* route (health, displays, supabase, ai/generate-content)
 // runs through the same Express app instead of hitting Vercel's static 404 page.

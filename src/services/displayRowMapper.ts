@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { DisplayConfig, SlideItem, AnnouncementItem, RunningTextItem } from '../types';
+import { DisplayConfig, SlideItem, AnnouncementItem, RunningTextItem } from '../types.js';
 
 // Row <-> DisplayConfig shape conversion, plus the child-table write helpers.
 // Used by both the browser client (services/supabase.ts) and the Express

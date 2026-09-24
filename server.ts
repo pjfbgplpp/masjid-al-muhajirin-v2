@@ -4,14 +4,14 @@ import path from 'path';
 import fs from 'fs';
 import { GoogleGenAI } from '@google/genai';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { DEFAULT_DISPLAYS } from './src/data/defaultConfig';
-import { DisplayConfig } from './src/types';
+import { DEFAULT_DISPLAYS } from './src/data/defaultConfig.js';
+import { DisplayConfig } from './src/types.js';
 import {
   buildDisplayDataColumn,
   assembleDisplayConfig,
   saveDisplayChildren,
   DISPLAY_SELECT_WITH_CHILDREN,
-} from './src/services/displayRowMapper';
+} from './src/services/displayRowMapper.js';
 
 const app = express();
 const PORT = 3000;

@@ -1,4 +1,4 @@
-import { DisplayConfig, ThemeConfig, ThemeTemplate } from '../types';
+import { DisplayConfig, ThemeConfig, ThemeTemplate } from '../types.js';
 
 export const THEME_PRESETS: Record<ThemeTemplate, { name: string; description: string; category?: 'Terang & Hangat' | 'Gelap & Elegan' | 'Warna Khusus'; theme: Partial<ThemeConfig> }> = {
   'natural-tones': {
